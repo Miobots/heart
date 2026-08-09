@@ -1,0 +1,19 @@
+# CODEOWNERS for Miobots/heart
+#
+# Every PR touching a listed path automatically requests review
+# from the owner(s) below. Most specific match wins.
+
+# Default owner — catches anything not explicitly covered
+* @Skinnyytallboy
+
+# ---- Subsystems ----
+# All currently owned by Jalal. When Ammar or Fouz take over a
+# subsystem, replace the line below with their username
+# (or add them alongside, e.g. "@Skinnyytallboy @ammar").
+
+/src/          @Skinnyytallboy
+
+# ---- Governance / infra ----
+# Keep this restricted to Jalal even after subsystems are
+# reassigned — CI, rulesets, and templates are security-sensitive.
+/.github/         @Skinnyytallboy
