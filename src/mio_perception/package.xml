@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>mio_perception</name>
+  <version>0.0.0</version>
+  <description>Object detection. ADVISORY ONLY - publishes detections, never a velocity. Python is a documented exception here (HEART_DECISIONS 18).</description>
+  <maintainer email="rayyan1106adeel@gmail.com">Jalal Ahmed</maintainer>
+  <license>TODO</license>
+  <export><build_type>ament_python</build_type></export>
+</package>

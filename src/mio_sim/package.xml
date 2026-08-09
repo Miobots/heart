@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>mio_sim</name>
+  <version>0.0.0</version>
+  <description>Gazebo world and simulated sensor config. SIM ONLY - never ships to the Pi.</description>
+  <maintainer email="rayyan1106adeel@gmail.com">Jalal Ahmed</maintainer>
+  <license>TODO</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

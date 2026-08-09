@@ -1,0 +1,8 @@
+Ignored by colcon on purpose, for now.
+
+These are plain cargo crates. Making them build as ROS 2 packages needs ros2_rust
+(colcon-cargo + cargo-ament-build), which is not installed and is its own setup task.
+Until that is done they build with `cargo build` and colcon skips them, so
+`colcon build` on the workspace still succeeds.
+
+Delete this file once ros2_rust is set up.
