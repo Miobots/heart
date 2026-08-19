@@ -12,3 +12,7 @@ graphify-out/
 # Tracked by nav2-lyrical.repos instead — restore with `vcs import src < nav2-lyrical.repos`.
 src/navigation2/
 src/slam_toolbox/
+
+# Local personal study guides (not committed)
+TEACHER.md
+teacher.md

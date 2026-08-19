@@ -165,6 +165,7 @@ not care.
 
 | Constraint | Value | Why it matters |
 |---|---|---|
+| Gazebo simulator | gz-sim 10.4.0 (Jetty) | ROS 2 Lyrical pairs with Jetty; Harmonic is retired |
 | Repo partition | ntfs3, ~24 GB free after the build | `-DCMAKE_BUILD_TYPE=Release` is baked into build.sh; Debug does not fit |
 | RAM | ~10 GB available of 14 GB, 17 GB swap | Sets `--parallel-workers`; see above |
 | Cores | 12 | Deliberately not used in full |
