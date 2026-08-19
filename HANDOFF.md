@@ -1,7 +1,8 @@
 # Handoff — Heart
 
-**Last updated:** 2026-08-13
-**Status:** Phase 0.1 complete. Next task is **0.4 / Phase 1 — URDF**.
+**Last updated:** 2026-08-14
+**Status:** Phase 0.1 complete and smoke-tested. **A decision is open on what to do next — see
+"Next step" below.** Committed on branch `stb/lyrical_source_build` (`c4cacdd`), not pushed.
 
 ---
 
@@ -39,6 +40,79 @@ available, 2 below it. Nav2's C++ will OOM at default parallelism across 12 core
 
 Same procedure on the Pi 5 in Phase 5.2. **Budget hours, not minutes**, and watch memory — add swap
 or cross-compile if it struggles.
+
+---
+
+## Read this before you run anything
+
+**`~/.bashrc` line 147 sources `~/ros2_ws/install/setup.bash`.** That is a *different* workspace with
+its own older nav2 and slam_toolbox — slam_toolbox there is from 2026-07-17 on branch
+`fix/slam-toolbox-map-serialization`, not the pinned `lyrical` commit. **In a fresh shell you are
+running that build, not this one.** Always overlay this workspace on top before testing:
+
+```bash
+cd repos/miobots-heart && source install/setup.bash
+```
+
+Verify which one you actually got: `ros2 pkg prefix slam_toolbox` must print a path inside
+`miobots-heart`, not `~/ros2_ws`.
+
+**slam_toolbox and every Nav2 server are lifecycle nodes.** `ros2 run slam_toolbox
+sync_slam_toolbox_node` starts the node in state `unconfigured` and it sits there doing nothing —
+that is correct behaviour, not a failure. The launch files do the configure/activate transitions.
+Use them.
+
+## Smoke test — what is proven to run
+
+No robot needed for either of these. Both were run on 2026-08-14 and both passed.
+
+```bash
+# Nav2: map server + AMCL against a bundled map
+ros2 launch nav2_bringup localization_launch.py \
+  map:=install/nav2_bringup/share/nav2_bringup/maps/warehouse.yaml \
+  use_sim_time:=false use_rviz:=false
+# in another shell:
+ros2 lifecycle get /map_server     # -> active [3]
+ros2 lifecycle get /amcl           # -> active [3]
+ros2 topic echo /map --once        # -> 1006 x 1674 @ 0.03 m/px
+```
+
+```bash
+# slam_toolbox, lifecycle-managed properly
+ros2 launch slam_toolbox online_async_launch.py use_sim_time:=false
+ros2 lifecycle get /slam_toolbox   # -> active [3]
+ros2 service list | grep slam_toolbox   # -> save_map, serialize_map
+```
+
+Neither produces a map, and that is expected — there is no `/scan` and no TF tree, because there is
+no robot yet. This proves the binaries run; it does not prove navigation works.
+
+**`tb3_loopback_simulation_launch.py` will not run as-is.** It needs `nav2_minimal_tb3_sim` for the
+turtlebot URDF, which is a separate repo (`ros-navigation/nav2_minimal_turtlebot_simulation`) that
+we deliberately did not build.
+
+---
+
+## Next step — an open decision
+
+Real mapping or navigation needs a robot. Three ways forward; **option A is the recommendation.**
+
+**A. Start Phase 1 — build our own robot.** Write `mio_description`'s URDF, spawn it in Gazebo,
+teleop it, add a simulated LiDAR, then point slam_toolbox at it. This is the next task on
+HEART_TASKS and the one W2-01 on the task board is waiting for. Slower to first pixel, but nothing
+is thrown away and it ends with a MioBots robot rather than a turtlebot.
+
+**B. Build the turtlebot sim first, as a reference.** Clone and build
+`ros-navigation/nav2_minimal_turtlebot_simulation` (~15 min), then
+`tb3_loopback_simulation_launch.py` gives the full Nav2 demo — drive a robot, build a map, send
+goals. Throwaway work that is not MioBots, but it is a known-good reference to diff against when our
+own URDF misbehaves, and Phase 1 debugging is where you will want one.
+
+**C. Neither — just fix the workspace shadowing.** Resolve the `~/ros2_ws` vs `miobots-heart`
+sourcing conflict described above so nobody keeps testing the wrong build, and stop there.
+
+Whichever is chosen, **do not run two of Phase 1's steps in parallel.** URDF → Gazebo spawn →
+manual driving → odometry → LiDAR → SLAM, strictly in order — see CLAUDE.md.
 
 ---
 
