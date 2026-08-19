@@ -1,0 +1,44 @@
+{
+  "autoMemoryDirectory": "~/.claude/miobots-memory",
+  "permissions": {
+    "allow": [
+      "Bash(./build.sh:*)",
+      "Bash(source /opt/ros/lyrical/setup.bash)",
+      "Bash(colcon list:*)",
+      "Bash(colcon graph:*)",
+      "Bash(ros2 pkg list:*)",
+      "Bash(ros2 pkg prefix:*)",
+      "Bash(ros2 topic list:*)",
+      "Bash(ros2 topic info:*)",
+      "Bash(ros2 node list:*)",
+      "Bash(ros2 interface show:*)",
+      "Bash(ros2 param list:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(rosdep check:*)",
+      "Bash(vcs status:*)",
+      "Bash(vcs export:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/guard.sh" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/rust-fmt.sh" }
+        ]
+      }
+    ]
+  }
+}

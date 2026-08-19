@@ -4,3 +4,11 @@ log/
 target/
 __pycache__/
 *.pyc
+
+# graphify: derived graph, rebuilt with `graphify update .`
+graphify-out/
+
+# Third-party source, built from source because Lyrical has no apt release for either.
+# Tracked by nav2-lyrical.repos instead — restore with `vcs import src < nav2-lyrical.repos`.
+src/navigation2/
+src/slam_toolbox/
