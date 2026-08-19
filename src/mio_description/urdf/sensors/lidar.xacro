@@ -40,6 +40,7 @@
   <!-- Gazebo Jetty (gz-sim 10) Sensor Plugin for LiDAR -->
   <gazebo reference="laser_frame">
     <sensor name="lidar" type="gpu_lidar">
+      <gz_frame_id>laser_frame</gz_frame_id>
       <pose>0 0 0 0 0 0</pose>
       <topic>/model/mio/scan</topic>
       <update_rate>10</update_rate>

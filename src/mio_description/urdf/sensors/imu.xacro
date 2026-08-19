@@ -22,6 +22,7 @@
   <!-- Gazebo Jetty (gz-sim 10) Sensor Plugin for IMU -->
   <gazebo reference="imu_frame">
     <sensor name="imu_sensor" type="imu">
+      <gz_frame_id>imu_frame</gz_frame_id>
       <always_on>1</always_on>
       <update_rate>50</update_rate>
       <visualize>true</visualize>
