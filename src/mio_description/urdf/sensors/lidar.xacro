@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ========================================== -->
+  <!-- 2D LiDAR Scanner (RPLiDAR / LD19)         -->
+  <!-- ========================================== -->
+  <xacro:property name="lidar_radius" value="0.035"/>
+  <xacro:property name="lidar_height" value="0.025"/>
+  <xacro:property name="lidar_mass" value="0.12"/>
+  <xacro:property name="lidar_offset_z" value="0.17"/>
+
+  <link name="laser_frame">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${lidar_radius}" length="${lidar_height}"/>
+      </geometry>
+      <material name="sensor_black"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${lidar_radius}" length="${lidar_height}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="${lidar_mass}"/>
+      <inertia ixx="${(lidar_mass/12.0) * (3*lidar_radius*lidar_radius + lidar_height*lidar_height)}" ixy="0.0" ixz="0.0"
+               iyy="${(lidar_mass/12.0) * (3*lidar_radius*lidar_radius + lidar_height*lidar_height)}" iyz="0.0"
+               izz="${(lidar_mass/2.0) * (lidar_radius*lidar_radius)}"/>
+    </inertial>
+  </link>
+
+  <joint name="laser_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="laser_frame"/>
+    <origin xyz="0 0 ${lidar_offset_z}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Gazebo Jetty (gz-sim 10) Sensor Plugin for LiDAR -->
+  <gazebo reference="laser_frame">
+    <sensor name="lidar" type="gpu_lidar">
+      <gz_frame_id>laser_frame</gz_frame_id>
+      <pose>0 0 0 0 0 0</pose>
+      <topic>/model/mio/scan</topic>
+      <update_rate>10</update_rate>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>360</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14159265</min_angle>
+            <max_angle>3.14159265</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.12</min>
+          <max>12.0</max>
+          <resolution>0.01</resolution>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+      </ray>
+      <always_on>1</always_on>
+      <visualize>true</visualize>
+    </sensor>
+  </gazebo>
+
+</robot>

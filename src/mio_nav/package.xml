@@ -1,10 +1,18 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>mio_nav</name>
-  <version>0.0.0</version>
-  <description>Nav2 and slam_toolbox parameters. Configuration, not code.</description>
+  <version>0.1.0</version>
+  <description>Navigation and SLAM mapping configurations for Mio.</description>
   <maintainer email="rayyan1106adeel@gmail.com">Jalal Ahmed</maintainer>
-  <license>TODO</license>
+  <license>MIT</license>
+
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <export><build_type>ament_cmake</build_type></export>
+
+  <exec_depend>slam_toolbox</exec_depend>
+  <exec_depend>nav2_map_server</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>
