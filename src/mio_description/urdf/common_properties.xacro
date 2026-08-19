@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ========================================== -->
+  <!-- Colors & Materials                         -->
+  <!-- ========================================== -->
+  <material name="chassis_white">
+    <color rgba="0.92 0.93 0.95 1.0"/>
+  </material>
+
+  <material name="accent_teal">
+    <color rgba="0.0 0.70 0.65 1.0"/>
+  </material>
+
+  <material name="rubber_dark">
+    <color rgba="0.15 0.15 0.15 1.0"/>
+  </material>
+
+  <material name="sensor_black">
+    <color rgba="0.08 0.08 0.08 1.0"/>
+  </material>
+
+  <material name="caster_metal">
+    <color rgba="0.6 0.6 0.6 1.0"/>
+  </material>
+
+  <!-- ========================================== -->
+  <!-- Inertial Calculation Macros               -->
+  <!-- ========================================== -->
+
+  <!-- Solid Box Inertia: mass * (h^2 + d^2) / 12 -->
+  <xacro:macro name="box_inertia" params="m w d h">
+    <inertial>
+      <mass value="${m}"/>
+      <inertia ixx="${(m/12.0) * (h*h + d*d)}" ixy="0.0" ixz="0.0"
+               iyy="${(m/12.0) * (w*w + h*h)}" iyz="0.0"
+               izz="${(m/12.0) * (w*w + d*d)}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- Solid Cylinder Inertia (along Z axis) -->
+  <xacro:macro name="cylinder_inertia" params="m r h">
+    <inertial>
+      <mass value="${m}"/>
+      <inertia ixx="${(m/12.0) * (3*r*r + h*h)}" ixy="0.0" ixz="0.0"
+               iyy="${(m/12.0) * (3*r*r + h*h)}" iyz="0.0"
+               izz="${(m/2.0) * (r*r)}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- Solid Sphere Inertia: 2/5 * m * r^2 -->
+  <xacro:macro name="sphere_inertia" params="m r">
+    <inertial>
+      <mass value="${m}"/>
+      <inertia ixx="${(2.0/5.0) * m * r*r}" ixy="0.0" ixz="0.0"
+               iyy="${(2.0/5.0) * m * r*r}" iyz="0.0"
+               izz="${(2.0/5.0) * m * r*r}"/>
+    </inertial>
+  </xacro:macro>
+
+</robot>

@@ -1,0 +1,206 @@
+<?xml version="1.0" ?>
+<sdf version="1.8">
+  <world name="home_arena">
+
+    <!-- ========================================== -->
+    <!-- Physics & Simulation Timing                -->
+    <!-- ========================================== -->
+    <physics name="1ms" type="dart">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <!-- ========================================== -->
+    <!-- Essential Gazebo Plugins                   -->
+    <!-- ========================================== -->
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+
+    <!-- ========================================== -->
+    <!-- Sunlight & Ambient Lighting                -->
+    <!-- ========================================== -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <!-- ========================================== -->
+    <!-- Ground Plane                               -->
+    <!-- ========================================== -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>20 20</size>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>20 20</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>
+            <diffuse>0.8 0.8 0.8 1</diffuse>
+            <specular>0.8 0.8 0.8 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ========================================== -->
+    <!-- Multi-Room Home Arena Walls                -->
+    <!-- Bounding: 8m x 6m                          -->
+    <!-- ========================================== -->
+    <model name="house_walls">
+      <static>true</static>
+      <pose>0 0 0 0 0 0</pose>
+
+      <!-- Outer North Wall (8m) -->
+      <link name="north_wall">
+        <pose>0 3 0.75 0 0 0</pose>
+        <collision name="col">
+          <geometry><box><size>8 0.15 1.5</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>8 0.15 1.5</size></box></geometry>
+          <material><ambient>0.7 0.7 0.75 1</ambient><diffuse>0.7 0.7 0.75 1</diffuse></material>
+        </visual>
+      </link>
+
+      <!-- Outer South Wall (8m) -->
+      <link name="south_wall">
+        <pose>0 -3 0.75 0 0 0</pose>
+        <collision name="col">
+          <geometry><box><size>8 0.15 1.5</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>8 0.15 1.5</size></box></geometry>
+          <material><ambient>0.7 0.7 0.75 1</ambient><diffuse>0.7 0.7 0.75 1</diffuse></material>
+        </visual>
+      </link>
+
+      <!-- Outer East Wall (6m) -->
+      <link name="east_wall">
+        <pose>4 0 0.75 0 0 0</pose>
+        <collision name="col">
+          <geometry><box><size>0.15 6 1.5</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.15 6 1.5</size></box></geometry>
+          <material><ambient>0.7 0.7 0.75 1</ambient><diffuse>0.7 0.7 0.75 1</diffuse></material>
+        </visual>
+      </link>
+
+      <!-- Outer West Wall (6m) -->
+      <link name="west_wall">
+        <pose>-4 0 0.75 0 0 0</pose>
+        <collision name="col">
+          <geometry><box><size>0.15 6 1.5</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.15 6 1.5</size></box></geometry>
+          <material><ambient>0.7 0.7 0.75 1</ambient><diffuse>0.7 0.7 0.75 1</diffuse></material>
+        </visual>
+      </link>
+
+      <!-- Interior Divider Wall 1 (Dividing Kitchen & Living Room with 1m Doorway) -->
+      <link name="divider_wall_1_a">
+        <pose>-1 1.8 0.75 0 0 0</pose>
+        <collision name="col">
+          <geometry><box><size>0.15 2.2 1.5</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.15 2.2 1.5</size></box></geometry>
+          <material><ambient>0.6 0.6 0.65 1</ambient><diffuse>0.6 0.6 0.65 1</diffuse></material>
+        </visual>
+      </link>
+
+      <link name="divider_wall_1_b">
+        <pose>-1 -1.8 0.75 0 0 0</pose>
+        <collision name="col">
+          <geometry><box><size>0.15 2.2 1.5</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.15 2.2 1.5</size></box></geometry>
+          <material><ambient>0.6 0.6 0.65 1</ambient><diffuse>0.6 0.6 0.65 1</diffuse></material>
+        </visual>
+      </link>
+
+      <!-- Interior Divider Wall 2 (Dividing Bedroom with 1m Doorway) -->
+      <link name="divider_wall_2">
+        <pose>1.5 0.8 0.75 0 0 0</pose>
+        <collision name="col">
+          <geometry><box><size>5 0.15 1.5</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>5 0.15 1.5</size></box></geometry>
+          <material><ambient>0.6 0.6 0.65 1</ambient><diffuse>0.6 0.6 0.65 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ========================================== -->
+    <!-- Furniture Obstacles                        -->
+    <!-- ========================================== -->
+    <!-- Coffee Table in Living Room -->
+    <model name="table_living_room">
+      <static>true</static>
+      <pose>-2.5 0 0.25 0 0 0</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>1.0 0.8 0.5</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>1.0 0.8 0.5</size></box></geometry>
+          <material><ambient>0.4 0.3 0.2 1</ambient><diffuse>0.4 0.3 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Kitchen Island in Kitchen Area -->
+    <model name="kitchen_counter">
+      <static>true</static>
+      <pose>2.5 -1.5 0.45 0 0 0</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>1.8 0.8 0.9</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>1.8 0.8 0.9</size></box></geometry>
+          <material><ambient>0.3 0.4 0.4 1</ambient><diffuse>0.3 0.4 0.4 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Bedroom Bed -->
+    <model name="bed">
+      <static>true</static>
+      <pose>2.5 2.0 0.3 0 0 0</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>1.6 1.8 0.6</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>1.6 1.8 0.6</size></box></geometry>
+          <material><ambient>0.2 0.3 0.5 1</ambient><diffuse>0.2 0.3 0.5 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>

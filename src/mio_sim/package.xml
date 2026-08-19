@@ -1,10 +1,19 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>mio_sim</name>
-  <version>0.0.0</version>
-  <description>Gazebo world and simulated sensor config. SIM ONLY - never ships to the Pi.</description>
+  <version>0.1.0</version>
+  <description>Gazebo Jetty (gz-sim 10) simulation environments, worlds, and bridges for Mio.</description>
   <maintainer email="rayyan1106adeel@gmail.com">Jalal Ahmed</maintainer>
-  <license>TODO</license>
+  <license>MIT</license>
+
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <export><build_type>ament_cmake</build_type></export>
+
+  <exec_depend>mio_description</exec_depend>
+  <exec_depend>ros_gz_sim</exec_depend>
+  <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>

@@ -1,0 +1,13 @@
+# Nav2 + slam_toolbox commits verified to build against ROS 2 Lyrical Luth (Ubuntu 26.04).
+# Both taken from their maintained `lyrical` branches — see HEART_DECISIONS 32.
+# Restore with: vcs import src < nav2-lyrical.repos && ./build.sh --symlink-install
+# Verified 2026-08-13: 46 packages, 17m43s, exit 0.
+repositories:
+  navigation2:
+    type: git
+    url: https://github.com/ros-navigation/navigation2.git
+    version: 1639b9f459d9df7a9d6c60c2a3a4faad6bb82c79
+  slam_toolbox:
+    type: git
+    url: https://github.com/SteveMacenski/slam_toolbox.git
+    version: 6953058b8994c7e750277fd8f39b984453abf63c

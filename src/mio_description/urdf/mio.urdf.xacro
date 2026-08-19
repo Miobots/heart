@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<robot name="mio" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Common Materials & Inertia Macros -->
+  <xacro:include filename="common_properties.xacro"/>
+
+  <!-- Core Differential Drive Chassis -->
+  <xacro:include filename="mio_core.xacro"/>
+
+  <!-- 2D LiDAR Sensor -->
+  <xacro:include filename="sensors/lidar.xacro"/>
+
+  <!-- IMU Sensor -->
+  <xacro:include filename="sensors/imu.xacro"/>
+
+  <!-- Gazebo Jetty (gz-sim 10) Physics & Plugins -->
+  <xacro:include filename="mio_gazebo.xacro"/>
+
+</robot>
