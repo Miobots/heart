@@ -1,8 +1,12 @@
 # Handoff — Heart
 
-**Last updated:** 2026-08-14
-**Status:** Phase 0.1 complete and smoke-tested. **A decision is open on what to do next — see
-"Next step" below.** Committed on branch `stb/lyrical_source_build` (`c4cacdd`), not pushed.
+**Last updated:** 2026-09-20
+**Status:** Phase 0.1 and Phase 1 are on `main` — the source build, the URDF, the Gazebo Jetty
+world, the slam_toolbox pipeline and the saved `home_arena` map. The 2026-08-14 note below said
+this work was "committed on `stb/lyrical_source_build`, not pushed"; it merged as PR #1.
+
+`H1.3` is measured rather than asserted: 1.00 m commanded reads **1.0002 m** on `/odom`
+(see `CHANGELOG.md`, 2026-09-20). For the project's state, read `STATUS.md` — not this file.
 
 ---
 
