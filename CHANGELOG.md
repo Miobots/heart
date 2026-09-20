@@ -5,6 +5,60 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-09-20 — Wheel geometry has one home, and H1.3 finally has a number
+
+### Summary
+
+`mio_gazebo.xacro` hard-coded `wheel_separation` as `0.20` and `wheel_radius` as `0.033` inside the
+DiffDrive plugin, while `mio_core.xacro` declared the same two values as xacro properties and built
+the wheels from them. Both files agreed, so nothing was broken — but these two numbers are what
+converts wheel rotation into distance. A copy that drifts from the model does not fail loudly; it
+makes `/odom` quietly wrong, which is precisely the failure `H1.3`'s *"1 m driven ≈ 1.0 m"* check
+exists to catch. They are both included from `mio.urdf.xacro`, so the properties were already in
+scope and this is a two-token fix.
+
+While verifying it, ran `H1.3`'s exit check and **wrote the number down**. `HEART_TASKS.md` records
+the check as *"Passed on 2026-08-19"* but no measured value appears anywhere in the repo or the
+vault, so the claim could not be re-checked by anyone.
+
+### Changed
+
+- **`mio_description/urdf/mio_gazebo.xacro`**: the DiffDrive plugin's `<wheel_separation>` and
+  `<wheel_radius>` now read `${wheel_separation}` and `${wheel_radius}` from `mio_core.xacro`.
+
+### Verified
+
+- `xacro` output is **semantically identical** before and after — same tree, same numbers, only the
+  comment and `0.20` rendering as `0.2` differ. `check_urdf` parses the tree cleanly.
+- **`H1.3` measured**, headless (`ros2 launch mio_sim sim.launch.py headless:=true`), driving
+  `/cmd_vel` at 0.2 m/s for 5 s:
+
+  | | |
+  |---|---|
+  | commanded | 1.00 m |
+  | reported on `/odom` | **1.0002 m** |
+  | error | +0.2 mm (100.0% of commanded) |
+
+- Simulator on this machine is **gz-sim 10.5.0** (Jetty). `STATUS.md` still records 10.4.0.
+
+---
+
+## 2026-08-19 — slam_toolbox mapping pipeline and the saved home_arena map
+
+*Recorded late: this session landed as `b624ea4` and was never written up, which broke this file's
+own "one entry per working session" rule.*
+
+### Added
+
+- **`mio_nav/launch/mapping.launch.py`** — brings up `slam_toolbox` in async mapping mode against
+  the simulated `/scan`.
+- **`mio_nav/config/slam_toolbox.yaml`** — mapper parameters for the `home_arena` world.
+- **`mio_nav/config/mapping.rviz`** — RViz profile showing the live occupancy grid while driving.
+- **`mio_nav/maps/home_arena.pgm` / `.yaml`** — the saved 2D map. 5 cm resolution, origin
+  `[-3.952, -2.949, 0]`. This is the artefact `H1.5` — the Gazebo SLAM deliverable — produces.
+
+---
+
 ## 2026-08-16 06:55 PKT — Phase 1: URDF / Xacro Robot Model & Gazebo Jetty Simulation Environment
 
 ### Summary Description

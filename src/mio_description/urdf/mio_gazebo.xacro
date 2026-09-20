@@ -69,9 +69,13 @@
       <left_joint>left_wheel_joint</left_joint>
       <right_joint>right_wheel_joint</right_joint>
 
-      <!-- Kinematics -->
-      <wheel_separation>0.20</wheel_separation>
-      <wheel_radius>0.033</wheel_radius>
+      <!-- Kinematics.
+           Taken from mio_core.xacro, never retyped. These two numbers are what converts wheel
+           rotation into distance, so a copy that drifts from the model does not fail loudly —
+           it just makes /odom quietly wrong, which is the exact failure H1.3's "1 m driven ≈
+           1.0 m" check exists to catch. -->
+      <wheel_separation>${wheel_separation}</wheel_separation>
+      <wheel_radius>${wheel_radius}</wheel_radius>
 
       <!-- Limits -->
       <max_linear_acceleration>1.5</max_linear_acceleration>
