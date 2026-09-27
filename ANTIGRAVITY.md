@@ -31,6 +31,9 @@ source install/setup.bash
 # Run simulation
 ros2 launch mio_sim sim.launch.py
 
-# Run on hardware
-ros2 launch mio_bringup real.launch.py
+# Build a map (slam_toolbox against the simulated /scan)
+ros2 launch mio_nav mapping.launch.py
+
+# Run on hardware — not written yet; mio_bringup has no launch files until Phase 5
+# ros2 launch mio_bringup real.launch.py
 ```

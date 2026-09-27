@@ -11,8 +11,16 @@ source install/setup.bash
 Design documentation is in the Obsidian vault two levels up, under
 `03 Engineering/Components/Heart/`. Start with `HEART_SPEC.md`.
 
-**Status: scaffold only.** The first task is building Nav2 and slam_toolbox from source against
-Lyrical — they are not packaged for it.
+**Phase 0.1 and Phase 1 are done:** Nav2 and slam_toolbox build from source against Lyrical (pinned
+in `nav2-lyrical.repos`), and the simulated robot drives, maps and saves a map:
+
+```bash
+ros2 launch mio_sim sim.launch.py          # robot in the home_arena world (headless:=true for no GUI)
+ros2 launch mio_nav mapping.launch.py      # slam_toolbox against the simulated /scan
+```
+
+Next is Phase 2 — AMCL localisation and Nav2 goals on the saved map. `HANDOFF.md` has the details;
+the project's state is in the vault's `STATUS.md`.
 
 ## Agent tooling
 
