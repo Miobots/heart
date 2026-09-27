@@ -84,14 +84,16 @@ writing an `if simulation` branch anywhere outside `mio_sim`, you have broken th
 
 ## Current state
 
-**Scaffold only. Nothing is implemented.**
+See the vault's `STATUS.md` for the project's state and `HANDOFF.md` for the detail; this covers
+only what is true inside this repo.
 
-The first task is **not** in this repo — it is building Nav2 and slam_toolbox from source against
-Lyrical, pinned in a `.repos` file committed here. Everything else waits on it, and its duration is
-genuinely unknown. Time-boxed to one week of real attempts, after which fall back to a
-containerised Jazzy environment.
+**Done:** Phase 0.1 — Nav2 and slam_toolbox built from source against Lyrical and pinned in
+`nav2-lyrical.repos`; the one-week time-box was not needed. Phase 1 — the URDF, the Gazebo Jetty
+world, manual driving, odometry (1.00 m commanded → 1.0002 m on `/odom`), the simulated LiDAR, and a
+saved SLAM map (`mio_nav/maps/home_arena`). **Not started:** everything from AMCL on. `mio_gateway`
+and `mio_safety_supervisor` are stubs, and `mio_bringup` has no launch files yet.
 
-Then, strictly in order: URDF → Gazebo spawn → manual driving → odometry → LiDAR → SLAM mapping →
+The order, strictly: URDF → Gazebo spawn → manual driving → odometry → LiDAR → SLAM mapping →
 AMCL → Nav2 goals → obstacle avoidance → safety supervisor → exploration → gateway → outbox →
 voice → hardware. **Never parallelize two of these.**
 

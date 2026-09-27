@@ -5,6 +5,16 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-09-27 — Documentation caught up with Phase 1
+
+Docs only. `README.md` and `CLAUDE.md` still said *scaffold only, nothing is implemented*, and
+`HANDOFF.md`'s "next step" still debated whether to start Phase 1. They now record Phase 0.1 and
+Phase 1 as done and name Phase 2 (`H2.1`, AMCL and Nav2 goals) as next. `ANTIGRAVITY.md` told you to
+run `mio_bringup real.launch.py`, which does not exist yet; it now shows `mapping.launch.py` and
+marks the hardware launch as Phase 5. `HANDOFF.md`'s simulator version is corrected to gz-sim 10.5.0.
+
+---
+
 ## 2026-09-20 — Wheel geometry has one home, and H1.3 finally has a number
 
 ### Summary

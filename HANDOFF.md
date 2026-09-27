@@ -1,6 +1,6 @@
 # Handoff — Heart
 
-**Last updated:** 2026-09-20
+**Last updated:** 2026-09-27
 **Status:** Phase 0.1 and Phase 1 are on `main` — the source build, the URDF, the Gazebo Jetty
 world, the slam_toolbox pipeline and the saved `home_arena` map. The 2026-08-14 note below said
 this work was "committed on `stb/lyrical_source_build`, not pushed"; it merged as PR #1.
@@ -88,8 +88,9 @@ ros2 lifecycle get /slam_toolbox   # -> active [3]
 ros2 service list | grep slam_toolbox   # -> save_map, serialize_map
 ```
 
-Neither produces a map, and that is expected — there is no `/scan` and no TF tree, because there is
-no robot yet. This proves the binaries run; it does not prove navigation works.
+Neither produces a map, and that was expected then — there was no `/scan` and no TF tree, because
+there was no robot yet. There is now: `ros2 launch mio_sim sim.launch.py` publishes both, and
+`ros2 launch mio_nav mapping.launch.py` builds a map from them.
 
 **`tb3_loopback_simulation_launch.py` will not run as-is.** It needs `nav2_minimal_tb3_sim` for the
 turtlebot URDF, which is a separate repo (`ros-navigation/nav2_minimal_turtlebot_simulation`) that
@@ -97,9 +98,14 @@ we deliberately did not build.
 
 ---
 
-## Next step — an open decision
+## Next step
 
-Real mapping or navigation needs a robot. Three ways forward; **option A is the recommendation.**
+**Phase 2 — `H2.1`, AMCL localisation and Nav2 goals** against the saved `home_arena` map, then
+`H2.2`, avoiding an obstacle that is not on the map. Phase 1 is done: option A below was taken, and
+the robot now drives, maps and saves a map in simulation. The options are kept because B is still a
+useful reference to diff against if Nav2 misbehaves on our URDF.
+
+*As decided on 2026-08-14:*
 
 **A. Start Phase 1 — build our own robot.** Write `mio_description`'s URDF, spawn it in Gazebo,
 teleop it, add a simulated LiDAR, then point slam_toolbox at it. This is the next task on
@@ -169,7 +175,7 @@ not care.
 
 | Constraint | Value | Why it matters |
 |---|---|---|
-| Gazebo simulator | gz-sim 10.4.0 (Jetty) | ROS 2 Lyrical pairs with Jetty; Harmonic is retired |
+| Gazebo simulator | gz-sim 10.5.0 (Jetty) | ROS 2 Lyrical pairs with Jetty; Harmonic is retired |
 | Repo partition | ntfs3, ~24 GB free after the build | `-DCMAKE_BUILD_TYPE=Release` is baked into build.sh; Debug does not fit |
 | RAM | ~10 GB available of 14 GB, 17 GB swap | Sets `--parallel-workers`; see above |
 | Cores | 12 | Deliberately not used in full |
