@@ -68,10 +68,13 @@
         </geometry>
         <material name="rubber_dark"/>
       </visual>
+      <!-- A sphere, not the cylinder: a flat cylinder touches the ground at its rims, which in
+           Gazebo narrowed the effective track to ~0.176 m. Spins overshot odometry by ~12% and a
+           3 m Nav2 run drifted 0.7 m. A sphere touches at one point, on the wheel's centre plane,
+           so the physics track equals `wheel_separation` — the same number odometry uses. -->
       <collision>
-        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
         <geometry>
-          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+          <sphere radius="${wheel_radius}"/>
         </geometry>
       </collision>
       <inertial>
