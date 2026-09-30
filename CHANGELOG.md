@@ -5,6 +5,21 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-10-01 — H2.1: AMCL and Nav2 goals in simulation
+
+`mio_nav/launch/navigation.launch.py` wraps `nav2_bringup`'s `bringup_launch.py` with the saved map
+and `mio_nav/config/nav2_params.yaml` — the stock file with the robot radius (0.12 m) and AMCL's
+initial pose changed, each marked `# mio:`. Keepout and speed zones are off; there are no masks.
+
+**Found:** Nav2 on Lyrical publishes `TwistStamped` on `/cmd_vel` (`enable_stamped_cmd_vel`
+defaults to true), and the bridge carried plain `Twist`, so Nav2 would plan and the wheels would
+never turn. The bridge is now `TwistStamped`; teleop needs `-p stamped:=true`.
+
+**Found:** the saved `home_arena` map covers ~2 m around the spawn point, not the house. See
+`HANDOFF.md`.
+
+---
+
 ## 2026-09-27 — Documentation caught up with Phase 1
 
 Docs only. `README.md` and `CLAUDE.md` still said *scaffold only, nothing is implemented*, and

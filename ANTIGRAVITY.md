@@ -16,6 +16,13 @@
 
 ---
 
+## Commits
+
+**One-line commit messages only** — no body. **Never add a `Co-Authored-By: Claude` trailer** or a
+"Generated with Claude Code" line, in any commit or PR.
+
+---
+
 ## Build & Run Directives
 
 > [!CAUTION]
@@ -33,6 +40,12 @@ ros2 launch mio_sim sim.launch.py
 
 # Build a map (slam_toolbox against the simulated /scan)
 ros2 launch mio_nav mapping.launch.py
+
+# Localise on the saved map and drive to goals (AMCL + Nav2; click "Nav2 Goal" in RViz)
+ros2 launch mio_nav navigation.launch.py
+
+# Drive by hand — /cmd_vel is TwistStamped, because Nav2 on Lyrical publishes stamped
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true   # /cmd_vel is TwistStamped
 
 # Run on hardware — not written yet; mio_bringup has no launch files until Phase 5
 # ros2 launch mio_bringup real.launch.py

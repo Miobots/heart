@@ -100,7 +100,14 @@ we deliberately did not build.
 
 ## Next step
 
-**Phase 2 — `H2.1`, AMCL localisation and Nav2 goals** against the saved `home_arena` map, then
+**`H2.1` works in simulation, verified headless** on 2026-10-01: `navigation.launch.py`, then two
+`NavigateToPose` goals — the same action RViz's "Nav2 Goal" sends — both `SUCCEEDED` and the robot
+stopped within the 0.25 m goal tolerance. The RViz click itself still needs doing on a machine with
+a display.
+
+**The saved map is not the house.** `home_arena.pgm` is essentially one scan from the spawn point:
+about 2 m around the origin is known, the rest is unknown. AMCL and goals work inside that patch
+and nowhere else. Re-map the whole house (H1.5's exit check) before demoing H2.1 or starting
 `H2.2`, avoiding an obstacle that is not on the map. Phase 1 is done: option A below was taken, and
 the robot now drives, maps and saves a map in simulation. The options are kept because B is still a
 useful reference to diff against if Nav2 misbehaves on our URDF.
