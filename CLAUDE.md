@@ -55,6 +55,13 @@ against pinned commits. Any document saying "Jazzy" is stale.
 
 ---
 
+## Commits
+
+**One-line commit messages only** — no body. **Never add a `Co-Authored-By: Claude` trailer** or a
+"Generated with Claude Code" line, in any commit or PR.
+
+---
+
 ## Package layout
 
 | Package | What it is | You write code, or configure? |
@@ -90,7 +97,10 @@ only what is true inside this repo.
 **Done:** Phase 0.1 — Nav2 and slam_toolbox built from source against Lyrical and pinned in
 `nav2-lyrical.repos`; the one-week time-box was not needed. Phase 1 — the URDF, the Gazebo Jetty
 world, manual driving, odometry (1.00 m commanded → 1.0002 m on `/odom`), the simulated LiDAR, and a
-saved SLAM map (`mio_nav/maps/home_arena`). **Not started:** everything from AMCL on. `mio_gateway`
+saved SLAM map (`mio_nav/maps/home_arena`). Phase 2 has started: `H2.1` — `mio_nav navigation.launch.py`
+runs AMCL on the saved map plus Nav2 (stock `nav2_bringup`, our values in `config/nav2_params.yaml`
+marked `# mio:`), and `/cmd_vel` is `TwistStamped`. **Not started:** everything from obstacle
+avoidance on. `mio_gateway`
 and `mio_safety_supervisor` are stubs, and `mio_bringup` has no launch files yet.
 
 The order, strictly: URDF → Gazebo spawn → manual driving → odometry → LiDAR → SLAM mapping →
