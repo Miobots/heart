@@ -21,7 +21,7 @@ ros2 launch mio_nav navigation.launch.py   # AMCL on the saved map + Nav2; click
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true   # /cmd_vel is TwistStamped
 ```
 
-Phase 2 is under way: `H2.1` (AMCL and Nav2 goals) runs in simulation. `HANDOFF.md` has the details;
+Phase 2 is under way: `H2.1` (AMCL and Nav2 goals) and `H2.2` (routing around a box dropped mid-run) run in simulation. `HANDOFF.md` has the details;
 the project's state is in the vault's `STATUS.md`.
 
 ## Agent tooling

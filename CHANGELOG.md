@@ -5,6 +5,20 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-10-01 — H2.2: routing around an unmapped box, and odometry that is honest in turns
+
+`mio_sim/models/obstacle_box.sdf` is a static 0.3 × 0.3 × 0.5 m box to drop in the robot's path
+mid-run. H2.2 needed **no Nav2 change**: the stock costmaps already mark `/scan` obstacles, and the
+robot replans and goes round. Verified three times against Gazebo ground truth — closest approach
+0.20–0.31 m, every goal `SUCCEEDED`.
+
+**Found:** odometry was wrong whenever the robot turned. Cylinder wheel collisions contacted the
+ground at their rims (effective track ~0.176 m against the 0.20 m odometry uses), so spins
+overshot by ~12% and a 3 m run drifted 0.7 m. H1.3 drove straight only. Wheel collisions are now
+spheres, and odometry matches ground truth in spins, arcs and zigzags.
+
+---
+
 ## 2026-10-01 — H2.1: AMCL and Nav2 goals in simulation
 
 `mio_nav/launch/navigation.launch.py` wraps `nav2_bringup`'s `bringup_launch.py` with the saved map

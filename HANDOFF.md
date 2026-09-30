@@ -107,8 +107,26 @@ a display.
 
 **The saved map is not the house.** `home_arena.pgm` is essentially one scan from the spawn point:
 about 2 m around the origin is known, the rest is unknown. AMCL and goals work inside that patch
-and nowhere else. Re-map the whole house (H1.5's exit check) before demoing H2.1 or starting
-`H2.2`, avoiding an obstacle that is not on the map. Phase 1 is done: option A below was taken, and
+and nowhere else. Re-map the whole house (H1.5's exit check) before demoing H2.1 or H2.2.
+
+**`H2.2` works in simulation, verified headless** on 2026-10-01. Drive `(-1.3, 0)` → `(1.0, 0)`
+and drop `mio_sim/models/obstacle_box.sdf` at the origin mid-run (command in the file's header).
+Three drops, the box appearing 1.1, 0.9 and 0.8 m ahead of the moving robot: each time it paused,
+replanned, went round and `SUCCEEDED`, with a closest **ground-truth** approach of 0.31, 0.23 and
+0.20 m. Measure clearance from Gazebo's `/world/home_arena/dynamic_pose/info`, not `/odom`.
+
+**Found on the way — odometry was wrong in every turn.** The wheels' cylinder collisions touched
+the ground at their rims, so the physics track was ~0.176 m while odometry used 0.20 m: spins
+overshot `/odom` by ~12% and a 3 m Nav2 run ended 0.7 m from where `/odom` said. H1.3 only drove
+straight, so it never showed. The wheel collisions are spheres now; spin, arc and zigzag match
+ground truth to the centimetre. **On hardware this is a calibration job** — `wheel_separation` in
+`mio_core.xacro` is the knob.
+
+**Test hygiene:** stopping a launch can leave `gz-sim-main` running, and every server on the
+machine shares Gazebo's topics, so a second sim silently mixes two robots' odometry. Check
+`pgrep -fa gz-sim-main` is empty before a run.
+
+Phase 1 is done: option A below was taken, and
 the robot now drives, maps and saves a map in simulation. The options are kept because B is still a
 useful reference to diff against if Nav2 misbehaves on our URDF.
 
