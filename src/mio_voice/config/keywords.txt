@@ -1,0 +1,10 @@
+▁HE Y ▁MI O :2.0 #0.15 @HEY_MIO
+▁HE Y ▁ME O :2.0 #0.15 @HEY_MIO
+▁HE Y ▁ME E O :2.0 #0.15 @HEY_MIO
+▁HE Y ▁MY O :2.0 #0.15 @HEY_MIO
+▁HE ▁ME O :2.0 #0.15 @HEY_MIO
+▁HA Y ▁ME O :2.0 #0.15 @HEY_MIO
+▁MI O :1.5 #0.3 @MIO
+▁ME O :1.5 #0.3 @MIO
+▁ME E O :1.5 #0.3 @MIO
+▁MY O :1.5 #0.3 @MIO

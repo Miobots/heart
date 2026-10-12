@@ -1,0 +1,307 @@
+# The closed list, and the keyword lists, for the offline voice pipeline.
+#
+# stage | intent | slot | lang | phrase        (tab-separated; '-' for no slot)
+#
+#   wake            ways the wake phrase comes out of the recogniser; stripped from the front
+#   deterministic   the whole utterance must be (nearly) this phrase; answered from a template
+#   grammar         the whole utterance must be (nearly) this phrase; a fixed command
+#   ask, brain      keywords: the utterance only has to contain the phrase
+#
+# `lang` picks the reply language: en, ur, or mixed (Urdu grammar with English words, answered in
+# Urdu). Urdu is written in Urdu script because that is what the recogniser emits for Urdu speech;
+# the Roman-Urdu rows cover the times it decides the speech was English.
+# Spelling variants (ي/ی, ك/ک, ؤ/و ...) are folded by the matcher and need no rows of their own.
+wake	wake	-	en	hey mio
+wake	wake	-	en	hey meo
+wake	wake	-	en	hey mia
+wake	wake	-	en	hey miyo
+wake	wake	-	en	hi mio
+wake	wake	-	en	hemio
+wake	wake	-	en	himio
+wake	wake	-	en	hemiyo
+wake	wake	-	en	hello mio
+wake	wake	-	en	ok mio
+wake	wake	-	en	mio
+wake	wake	-	en	meo
+wake	wake	-	en	miyo
+wake	wake	-	ur	ہے میو
+wake	wake	-	ur	ہیمیو
+wake	wake	-	ur	حیمیو
+wake	wake	-	ur	ہی میو
+wake	wake	-	ur	ہیلو میو
+wake	wake	-	ur	اے میو
+wake	wake	-	ur	ہے میئو
+wake	wake	-	ur	ہے میوں
+wake	wake	-	ur	میو
+wake	wake	-	ur	میئو
+deterministic	battery	-	en	what is your battery
+deterministic	battery	-	en	what is your battery level
+deterministic	battery	-	en	whats your battery level
+deterministic	battery	-	en	how much battery do you have
+deterministic	battery	-	en	how much battery is left
+deterministic	battery	-	en	how much charge is left
+deterministic	battery	-	en	battery level
+deterministic	battery	-	en	battery status
+deterministic	battery	-	ur	بیٹری کتنی ہے
+deterministic	battery	-	ur	تمہاری بیٹری کتنی ہے
+deterministic	battery	-	ur	کتنی بیٹری بچی ہے
+deterministic	battery	-	ur	بیٹری کتنی باقی ہے
+deterministic	battery	-	ur	بیٹری کتنی رہ گئی ہے
+deterministic	battery	-	ur	چارج کتنا ہے
+deterministic	battery	-	ur	کتنی چارجنگ ہے
+deterministic	battery	-	mixed	battery kitni hai
+deterministic	battery	-	mixed	battery kitni bachi hai
+deterministic	battery	-	mixed	بیٹری لیول کیا ہے
+deterministic	battery	-	mixed	بیٹری لیول کتنا ہے
+deterministic	time	-	en	what time is it
+deterministic	time	-	en	what is the time
+deterministic	time	-	en	whats the time
+deterministic	time	-	en	tell me the time
+deterministic	time	-	en	what time is it now
+deterministic	time	-	en	can you tell me the time
+deterministic	time	-	ur	کیا وقت ہوا ہے
+deterministic	time	-	ur	وقت کیا ہوا ہے
+deterministic	time	-	ur	کتنے بجے ہیں
+deterministic	time	-	ur	ٹائم کیا ہوا ہے
+deterministic	time	-	ur	کیا ٹائم ہوا ہے
+deterministic	time	-	ur	ٹائم کیا ہے
+deterministic	time	-	ur	ابھی کیا وقت ہے
+deterministic	time	-	ur	ابھی کتنے بجے ہیں
+deterministic	time	-	mixed	time kya hua hai
+deterministic	time	-	mixed	kitne baje hain
+deterministic	next_reminder	-	en	what is my next reminder
+deterministic	next_reminder	-	en	whats my next reminder
+deterministic	next_reminder	-	en	do i have any reminders
+deterministic	next_reminder	-	en	any reminders
+deterministic	next_reminder	-	en	what is next on my schedule
+deterministic	next_reminder	-	en	when is my next reminder
+deterministic	next_reminder	-	ur	میرا اگلا ریمائنڈر کیا ہے
+deterministic	next_reminder	-	ur	اگلا ریمائنڈر کیا ہے
+deterministic	next_reminder	-	ur	میرا اگلا ریمائنڈر کب ہے
+deterministic	next_reminder	-	ur	کوئی ریمائنڈر ہے
+deterministic	next_reminder	-	ur	اگلی یاد دہانی کیا ہے
+deterministic	next_reminder	-	mixed	agla reminder kya hai
+deterministic	next_reminder	-	mixed	نیکسٹ ریمائنڈر کب ہے
+deterministic	next_reminder	-	mixed	نیکسٹ ریمائنڈر کیا ہے
+deterministic	room	-	en	which room are you in
+deterministic	room	-	en	what room are you in
+deterministic	room	-	en	where are you
+deterministic	room	-	en	where are you right now
+deterministic	room	-	en	which room is this
+deterministic	room	-	ur	تم کس کمرے میں ہو
+deterministic	room	-	ur	تم کہاں ہو
+deterministic	room	-	ur	تم کدھر ہو
+deterministic	room	-	ur	تم ابھی کہاں ہو
+deterministic	room	-	ur	آپ کس کمرے میں ہیں
+deterministic	room	-	ur	آپ کہاں ہیں
+deterministic	room	-	ur	یہ کون سا کمرہ ہے
+deterministic	room	-	mixed	tum kis kamre mein ho
+deterministic	room	-	mixed	tum kahan ho
+deterministic	capabilities	-	en	what can you do now
+deterministic	capabilities	-	en	what can you do
+deterministic	capabilities	-	en	what can you do right now
+deterministic	capabilities	-	en	what are you able to do
+deterministic	capabilities	-	en	what works right now
+deterministic	capabilities	-	ur	تم کیا کر سکتے ہو
+deterministic	capabilities	-	ur	تم ابھی کیا کر سکتے ہو
+deterministic	capabilities	-	ur	تم کیا کیا کر سکتے ہو
+deterministic	capabilities	-	ur	آپ کیا کر سکتے ہیں
+deterministic	capabilities	-	ur	ابھی کیا کر سکتے ہو
+deterministic	capabilities	-	mixed	tum kya kar sakte ho
+deterministic	capabilities	-	mixed	آف لائن تم کیا کر سکتے ہو
+grammar	stop	-	en	stop
+grammar	stop	-	en	stop now
+grammar	stop	-	en	stop moving
+grammar	stop	-	en	stop right there
+grammar	stop	-	en	halt
+grammar	stop	-	ur	رکو
+grammar	stop	-	ur	رک جاؤ
+grammar	stop	-	ur	بس رک جاؤ
+grammar	stop	-	ur	بس رکو
+grammar	stop	-	ur	ٹھہرو
+grammar	stop	-	ur	ٹھہر جاؤ
+grammar	stop	-	ur	اسٹاپ
+grammar	stop	-	mixed	ruk jao
+grammar	stop	-	mixed	ruko
+grammar	stop	-	mixed	stop karo
+grammar	cancel	-	en	cancel
+grammar	cancel	-	en	cancel that
+grammar	cancel	-	en	never mind
+grammar	cancel	-	en	forget it
+grammar	cancel	-	ur	کینسل کرو
+grammar	cancel	-	ur	کینسل کر دو
+grammar	cancel	-	ur	رہنے دو
+grammar	cancel	-	ur	چھوڑ دو
+grammar	dock	-	en	dock
+grammar	dock	-	en	go to your dock
+grammar	dock	-	en	go to the dock
+grammar	dock	-	en	return to the dock
+grammar	dock	-	en	go charge
+grammar	dock	-	en	go and charge
+grammar	dock	-	en	go to the charger
+grammar	dock	-	ur	چارج ہونے جاؤ
+grammar	dock	-	ur	ڈاک پر جاؤ
+grammar	dock	-	ur	چارجر پر جاؤ
+grammar	dock	-	ur	چارجنگ پر جاؤ
+grammar	dock	-	ur	جا کر چارج ہو جاؤ
+grammar	dock	-	mixed	dock par jao
+grammar	dock	-	mixed	charge hone jao
+grammar	dock	-	mixed	ڈاک پر واپس جاؤ
+grammar	mute	-	en	mute
+grammar	mute	-	en	mute yourself
+grammar	mute	-	en	be quiet
+grammar	mute	-	en	quiet
+grammar	mute	-	en	stop talking
+grammar	mute	-	ur	خاموش ہو جاؤ
+grammar	mute	-	ur	خاموش
+grammar	mute	-	ur	چپ ہو جاؤ
+grammar	mute	-	ur	چپ کرو
+grammar	mute	-	ur	میوٹ ہو جاؤ
+grammar	unmute	-	en	unmute
+grammar	unmute	-	en	unmute yourself
+grammar	unmute	-	en	you can talk now
+grammar	unmute	-	en	you can speak now
+grammar	unmute	-	ur	اب بول سکتے ہو
+grammar	unmute	-	ur	اب بولو
+grammar	unmute	-	ur	ان میوٹ ہو جاؤ
+grammar	unmute	-	ur	آواز کھولو
+grammar	patrol_start	-	en	start patrol
+grammar	patrol_start	-	en	start patrolling
+grammar	patrol_start	-	en	begin patrol
+grammar	patrol_start	-	en	patrol the house
+grammar	patrol_start	-	en	start patrolling the house
+grammar	patrol_start	-	ur	گشت شروع کرو
+grammar	patrol_start	-	ur	پیٹرول شروع کرو
+grammar	patrol_start	-	ur	پٹرول شروع کرو
+grammar	patrol_start	-	ur	گھر کا چکر لگاؤ
+grammar	patrol_pause	-	en	pause patrol
+grammar	patrol_pause	-	en	pause the patrol
+grammar	patrol_pause	-	en	stop patrolling
+grammar	patrol_pause	-	en	hold the patrol
+grammar	patrol_pause	-	ur	گشت روک دو
+grammar	patrol_pause	-	ur	گشت روکو
+grammar	patrol_pause	-	ur	پیٹرول روک دو
+grammar	patrol_pause	-	ur	پٹرول روک دو
+grammar	patrol_resume	-	en	resume patrol
+grammar	patrol_resume	-	en	resume patrolling
+grammar	patrol_resume	-	en	continue patrol
+grammar	patrol_resume	-	en	continue the patrol
+grammar	patrol_resume	-	ur	گشت جاری رکھو
+grammar	patrol_resume	-	ur	گشت دوبارہ شروع کرو
+grammar	patrol_resume	-	ur	پیٹرول جاری رکھو
+grammar	patrol_resume	-	ur	پیٹرول دوبارہ شروع کرو
+grammar	goto	kitchen	en	go to the kitchen
+grammar	goto	kitchen	en	go to kitchen
+grammar	goto	kitchen	en	come to the kitchen
+grammar	goto	kitchen	en	move to the kitchen
+grammar	goto	kitchen	ur	کچن میں جاؤ
+grammar	goto	kitchen	ur	کچن جاؤ
+grammar	goto	kitchen	ur	کچن میں آؤ
+grammar	goto	kitchen	ur	کچن میں چلے جاؤ
+grammar	goto	kitchen	ur	باورچی خانے میں جاؤ
+grammar	goto	kitchen	mixed	kitchen jao
+grammar	goto	kitchen	mixed	kitchen mein jao
+grammar	goto	kitchen	mixed	kitchen mein aao
+grammar	goto	living_room	en	go to the living room
+grammar	goto	living_room	en	go to living room
+grammar	goto	living_room	en	come to the living room
+grammar	goto	living_room	en	go to the lounge
+grammar	goto	living_room	ur	لاؤنج میں جاؤ
+grammar	goto	living_room	ur	لاؤنج جاؤ
+grammar	goto	living_room	ur	لاؤنج میں آؤ
+grammar	goto	living_room	ur	لونگ روم میں جاؤ
+grammar	goto	living_room	ur	لیونگ روم میں جاؤ
+grammar	goto	living_room	ur	بیٹھک میں جاؤ
+grammar	goto	living_room	mixed	lounge mein jao
+grammar	goto	living_room	mixed	living room mein jao
+grammar	goto	bedroom	en	go to the bedroom
+grammar	goto	bedroom	en	go to bedroom
+grammar	goto	bedroom	en	come to the bedroom
+grammar	goto	bedroom	en	move to the bedroom
+grammar	goto	bedroom	ur	بیڈ روم میں جاؤ
+grammar	goto	bedroom	ur	بیڈروم میں جاؤ
+grammar	goto	bedroom	ur	بیڈ روم جاؤ
+grammar	goto	bedroom	ur	بیڈ روم میں آؤ
+grammar	goto	bedroom	ur	سونے کے کمرے میں جاؤ
+grammar	goto	bedroom	mixed	bedroom jao
+grammar	goto	bedroom	mixed	bedroom mein jao
+grammar	repeat	-	en	repeat
+grammar	repeat	-	en	repeat that
+grammar	repeat	-	en	say that again
+grammar	repeat	-	en	what did you say
+grammar	repeat	-	en	come again
+grammar	repeat	-	ur	دوبارہ بولو
+grammar	repeat	-	ur	دوبارہ کہو
+grammar	repeat	-	ur	پھر سے بولو
+grammar	repeat	-	ur	پھر سے کہو
+grammar	repeat	-	ur	کیا کہا
+grammar	louder	-	en	louder
+grammar	louder	-	en	speak louder
+grammar	louder	-	en	speak up
+grammar	louder	-	en	volume up
+grammar	louder	-	ur	اونچا بولو
+grammar	louder	-	ur	زور سے بولو
+grammar	louder	-	ur	آواز اونچی کرو
+grammar	louder	-	ur	آواز بڑھاؤ
+grammar	quieter	-	en	quieter
+grammar	quieter	-	en	speak softly
+grammar	quieter	-	en	lower your voice
+grammar	quieter	-	en	volume down
+grammar	quieter	-	ur	آہستہ بولو
+grammar	quieter	-	ur	دھیما بولو
+grammar	quieter	-	ur	آواز کم کرو
+grammar	quieter	-	ur	آواز آہستہ کرو
+grammar	quieter	-	mixed	والیوم کم کرو
+grammar	sleep	-	en	go to sleep
+grammar	sleep	-	en	sleep
+grammar	sleep	-	en	sleep now
+grammar	sleep	-	en	good night
+grammar	sleep	-	ur	سو جاؤ
+grammar	sleep	-	ur	اب سو جاؤ
+grammar	sleep	-	ur	شب بخیر
+grammar	sleep	-	ur	سلیپ ہو جاؤ
+ask	when	-	en	when
+ask	when	-	en	what time did
+ask	when	-	en	how long ago
+ask	when	-	mixed	kab
+ask	when	-	ur	کب
+ask	when	-	ur	کتنی دیر پہلے
+ask	where	-	en	where
+ask	where	-	en	have you seen
+ask	where	-	en	did you see
+ask	where	-	en	find
+ask	where	-	mixed	kahan
+ask	where	-	mixed	kidhar
+ask	where	-	ur	کہاں
+ask	where	-	ur	کدھر
+ask	where	-	ur	دیکھا ہے
+ask	where	-	ur	دیکھی ہے
+ask	where	-	ur	ڈھونڈو
+brain	needs_brain	-	en	light
+brain	needs_brain	-	en	lights
+brain	needs_brain	-	en	fan
+brain	needs_brain	-	en	air conditioner
+brain	needs_brain	-	en	television
+brain	needs_brain	-	en	call
+brain	needs_brain	-	en	weather
+brain	needs_brain	-	en	music
+brain	needs_brain	-	en	song
+brain	needs_brain	-	en	news
+brain	needs_brain	-	en	email
+brain	needs_brain	-	en	message
+brain	needs_brain	-	en	laptop
+brain	needs_brain	-	en	remind me
+brain	needs_brain	-	en	reminder
+brain	needs_brain	-	ur	لائٹ
+brain	needs_brain	-	ur	لائٹس
+brain	needs_brain	-	ur	بتی
+brain	needs_brain	-	ur	پنکھا
+brain	needs_brain	-	ur	کال
+brain	needs_brain	-	ur	موسم
+brain	needs_brain	-	ur	گانا
+brain	needs_brain	-	ur	میوزک
+brain	needs_brain	-	ur	خبریں
+brain	needs_brain	-	ur	میسج
+brain	needs_brain	-	ur	لیپ ٹاپ
+brain	needs_brain	-	ur	ریمائنڈر
+brain	needs_brain	-	ur	یاد دلانا

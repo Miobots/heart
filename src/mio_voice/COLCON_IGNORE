@@ -1,0 +1,4 @@
+mio_voice is a plain CMake project for now (H4.0: the voice pipeline standalone, no ROS).
+Build it with cmake, not colcon — see README.md. Without this file ./build.sh would try to
+configure it as a ROS package and compile whisper.cpp into the workspace build.
+Delete this file when H4.1 wraps the pipeline as a ROS node.
