@@ -13,6 +13,7 @@
 3. **Cliff Sensor Rule:** Cliff drop-off detection stops robot immediately and writes permanent no-go zone into costmap.
 4. **Halt-Then-Run Local Voice:** If local 1B model runs during navigation, pause navigation, generate answer, unload model, and resume navigation.
 5. **Durable Outbox (`mio_gateway`):** Events queue to disk during network dropouts and drain in order upon reconnection.
+6. **Grounded Local Voice (`mio_voice`):** If local search finds nothing, the local model is never started. It only picks a retrieved row; a template speaks. No audio leaves the device.
 
 ---
 
@@ -49,4 +50,14 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true
 
 # Run on hardware — not written yet; mio_bringup has no launch files until Phase 5
 # ros2 launch mio_bringup real.launch.py
+
+# Voice pipeline standalone (H4.0) — plain CMake, NOT colcon (src/mio_voice has COLCON_IGNORE)
+src/mio_voice/scripts/fetch_deps.sh
+cmake -S src/mio_voice -B ~/.cache/mio_voice/build && cmake --build ~/.cache/mio_voice/build -j4
+ctest --test-dir ~/.cache/mio_voice/build
+~/.cache/mio_voice/build/mio_voice listen
 ```
+
+`H4.0` is built but **not measured on a human voice yet**; `src/mio_voice/corpus/manifest.tsv` still
+has to be recorded. The build-order chain's "voice" means voice on the robot (`H4.1`–`H4.4`); `H4.0`
+is a laptop program outside it (HEART_DECISIONS 42).

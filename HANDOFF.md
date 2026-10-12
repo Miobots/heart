@@ -1,6 +1,6 @@
 # Handoff — Heart
 
-**Last updated:** 2026-09-27
+**Last updated:** 2026-10-12 (the voice section under "Next step"; the rest is as of 2026-09-27)
 **Status:** Phase 0.1 and Phase 1 are on `main` — the source build, the URDF, the Gazebo Jetty
 world, the slam_toolbox pipeline and the saved `home_arena` map. The 2026-08-14 note below said
 this work was "committed on `stb/lyrical_source_build`, not pushed"; it merged as PR #1.
@@ -99,6 +99,25 @@ we deliberately did not build.
 ---
 
 ## Next step
+
+**`H4.0` — the voice pipeline is built and waiting for a voice.** `src/mio_voice` runs the offline
+chain on a laptop (`src/mio_voice/README.md`). Its tests pass, it answers typed and spoken requests
+in Urdu and English, and it runs with the network removed. What it has **not** had is a person:
+every audio number so far comes from synthetic speech, which measures nothing about people.
+
+To finish it, in order:
+
+1. `src/mio_voice/scripts/record.sh <name>` — 163 short clips, about 20 minutes. Read
+   `corpus/manifest.tsv` first and fix any Urdu wording that is not how you would say it.
+2. `mio_voice eval --audio corpus/audio/<name> --split dev` — tune on this half only: add the
+   wake-phrase spellings and command wordings the recogniser actually produces to
+   `config/phrases.tsv`, and pick `--whisper`, `--audio-ctx` and `--wake`.
+3. `mio_voice eval --audio corpus/audio/<name> --split test` — report this half. Then a second
+   speaker, and `mio_voice eval --background <3 hours of household audio>` for the false-trigger
+   rate HEART_DECISIONS 27 asks for.
+4. Write the numbers into the vault's `VOICE_EVAL.md`, tick `H4.0`, push the branch.
+
+The same recordings can be run through cloud providers for `X1`, which is still open.
 
 **`H2.1` works in simulation, verified headless** on 2026-10-01: `navigation.launch.py`, then two
 `NavigateToPose` goals — the same action RViz's "Nav2 Goal" sends — both `SUCCEEDED` and the robot

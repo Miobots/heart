@@ -5,6 +5,46 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-10-12 — H4.0: the offline voice pipeline, standalone on a laptop (built, not yet measured on a voice)
+
+`src/mio_voice` is no longer a scaffold. It is a C++ program, `mio_voice`, that runs the whole
+offline chain with no robot, no ROS and no network: wake phrase → whisper.cpp → the four named
+stages → a Piper voice. Plain CMake with `COLCON_IGNORE`; engines and models live in
+`~/.cache/mio_voice`, fetched by `scripts/fetch_deps.sh` with pinned checksums. `README.md` in the
+package has the build, the commands and how to measure.
+
+`src/core.cpp` holds every decision and links no engine, so the stage order and the rule that
+cannot bend are tested without one: **if local search returns nothing, the model is never
+started.** The model is a child process (`llama-completion`), so that is a process count, and it
+may only emit `{"row": N, "ask": "where"|"when"|"none"}` — a template speaks the reply.
+
+**Not done.** H4.0's exit check needs real recordings and there are none yet. Everything measured
+so far is on text or on synthetic speech; the numbers and what is still missing are in the vault's
+`VOICE_EVAL.md`. Record with `src/mio_voice/scripts/record.sh`.
+
+**Found:** an English wake phrase in front of Urdu speech makes whisper's language detector call
+the whole thing English and transcribe the Urdu as nonsense. The language is now judged on the
+audio after the first 0.9 s, and the phrase is stripped from the transcript.
+
+**Found:** left to choose among all its languages, the detector often hears Urdu as Hindi and
+writes Devanagari. Only English or Urdu is allowed; Hindi counts as Urdu.
+
+**Found:** a vocabulary prompt (a list of room and object names) made the recogniser echo the list
+back instead of the speech. Removed.
+
+**Found:** Qwen3.5's chat template aborts `llama-completion` on a lone system message ("No user
+query found"), so the instructions go in the user turn. With the model's default context a 1.1 GB
+model peaked at 2.7 GB; `-c 1024` brings a 0.5 GB model to under 0.9 GB.
+
+**Found:** the keyword spotter misses a good share of synthetic "Hey Mio"s, fewer with the
+full-precision model files and a wider search than with its defaults. A second detector — the
+first 2.5 s transcribed as English — exists alongside it; which one ships is decided on recordings.
+
+**Found:** `unshare -rn` is blocked by AppArmor on Ubuntu 26.04. `bwrap --unshare-net` is not, and
+is how "runs with no network" is shown.
+
+---
+
 ## 2026-10-01 — H2.2: routing around an unmapped box, and odometry that is honest in turns
 
 `mio_sim/models/obstacle_box.sdf` is a static 0.3 × 0.3 × 0.5 m box to drop in the robot's path

@@ -82,6 +82,13 @@ building them as ROS 2 packages needs `ros2_rust` (colcon-cargo + cargo-ament-bu
 installed and is its own task. Delete the ignore file once that is set up. Until then `cargo build`
 works and colcon skips them, so the workspace still builds.
 
+**`mio_voice` carries `COLCON_IGNORE` too, for a different reason.** `H4.0` is the voice pipeline
+standalone: C++, plain CMake, no ROS, built outside the workspace (`src/mio_voice/README.md`).
+Without the ignore file `./build.sh` would configure it as a ROS package and compile whisper.cpp
+into the workspace build. Delete the file when `H4.1` wraps the pipeline as a node. The Python guard
+covers everything under `src/mio_voice`, launch files included — `H4.1` needs an XML launch file,
+or one in `mio_bringup`.
+
 **The architectural bet: sim and real are the same code.** Only the launch file and the driver
 packages differ — Gazebo plugins publish `/scan`, `/imu`, `/odom` in simulation; real drivers
 publish the same topics on hardware. Same topic names, same message types. If you find yourself
@@ -104,9 +111,17 @@ marked `# mio:`), and `/cmd_vel` is `TwistStamped`; `H2.2` — it routes around 
 the safety supervisor on. `mio_gateway`
 and `mio_safety_supervisor` are stubs, and `mio_bringup` has no launch files yet.
 
+**`H4.0` is built but not finished.** `src/mio_voice` is the offline voice pipeline running
+standalone on a laptop — wake phrase, whisper.cpp, the four stages, a ~1B model as a child process,
+Piper voices — with its tests passing and the whole chain running with the network removed. **It has
+not been measured on a human voice**, and the task is not done until it has: the corpus in
+`src/mio_voice/corpus/manifest.tsv` still has to be recorded. See the vault's `VOICE_EVAL.md`.
+
 The order, strictly: URDF → Gazebo spawn → manual driving → odometry → LiDAR → SLAM mapping →
 AMCL → Nav2 goals → obstacle avoidance → safety supervisor → exploration → gateway → outbox →
-voice → hardware. **Never parallelize two of these.**
+voice → hardware. **Never parallelize two of these.** "Voice" there is voice *on the robot*
+(`H4.1`–`H4.4`). `H4.0` sits outside the chain: a laptop program that touches nothing in the ROS
+graph (HEART_DECISIONS 42).
 
 ---
 
