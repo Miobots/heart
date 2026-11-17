@@ -45,7 +45,10 @@ and E-stop, and survives the Pi freezing entirely. The Rust supervisor clamps an
 reaches the MCU but **cannot override it**. The MCU is final authority.
 
 **Tip-over ordering never changes:** halt motors → announce aloud locally → report upward. In that
-order, every time.
+order, every time. In code: the supervisor publishes the stop, and only then `TIP_OVER` on
+`/diagnostics` — which is where the voice and the gateway hear of it, so neither can get ahead of
+the halt. The lock is released only by `~/clear`, and only with the robot upright. **No usable IMU
+data means no motion** (HEART_DECISIONS 48).
 
 ---
 
@@ -115,7 +118,9 @@ runs AMCL on the saved map plus Nav2 (stock `nav2_bringup`, our values in `confi
 marked `# mio:`), and `/cmd_vel` is `TwistStamped`; `H2.2` — it routes around a box dropped mid-run
 (`mio_sim/models/obstacle_box.sdf`), with no config change needed; `H2.3` — `mio_safety_supervisor`
 clamps `/cmd_vel` into `/cmd_vel_safe` and has the robot standing still within 400 ms of the last
-command (250 ms of silence, then up to 150 ms of braking), and `sim.launch.py` starts it. **Not started:** tip-over (`H2.4`) and everything after it. `mio_gateway`
+command (240 ms of silence, then up to 160 ms of braking), and `sim.launch.py` starts it; `H2.4` —
+the same node locks the wheels when the robot tips past 30° and keeps them locked until
+`~/clear`. **Not started:** the gateway runtime (`H3.1`) and everything after it. `mio_gateway`
 has the wire decoder and its conformance tests but its binary is still a scaffold, and `mio_bringup`
 has no launch files yet.
 
