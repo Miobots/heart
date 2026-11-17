@@ -1,4 +1,9 @@
 //! Rust side of the shared MioBots wire contract. The vectors live in miobots-protocol.
+//!
+//! This library needs no ROS: `cargo test` runs it anywhere, which is what CI does. `session` is
+//! what the gateway does with the contract; the ROS node is the binary, behind the `ros` feature.
+
+pub mod session;
 
 use serde_json::{Map, Value};
 
@@ -127,8 +132,9 @@ fn rpc_valid(topic: &str, payload: &Map<String, Value>) -> bool {
     }
 }
 
-fn allowed_kind(topic: &str, kind: &str) -> bool {
-    let kinds: &[&str] = match topic {
+/// The kinds each topic may travel as (ENVELOPE §10). None for a topic that is not on the list.
+fn kinds_for(topic: &str) -> Option<&'static [&'static str]> {
+    Some(match topic {
         "sys.hello" | "sys.approval" | "sys.killswitch" | "voice.speak" | "nav.goto"
         | "nav.cancel" | "sched.window" | "region.upsert" | "region.confirm" | "zone.upsert"
         | "mcp.request" => &["CMD", "ACK"],
@@ -139,9 +145,18 @@ fn allowed_kind(topic: &str, kind: &str) -> bool {
         "state.pose" | "state.battery" | "map.snapshot" => &["TELEM"],
         "cap.manifest" => &["EVT", "QRY", "RPY"],
         "mcp.notification" => &["CMD", "EVT", "ACK"],
-        _ => return true,
-    };
-    kinds.contains(&kind)
+        _ => return None,
+    })
+}
+
+/// Whether a topic is one this implementation knows. An unknown topic is answered with an error,
+/// never guessed at (ENVELOPE §9).
+pub fn known_topic(topic: &str) -> bool {
+    kinds_for(topic).is_some()
+}
+
+fn allowed_kind(topic: &str, kind: &str) -> bool {
+    kinds_for(topic).is_none_or(|kinds| kinds.contains(&kind))
 }
 
 fn payload_valid(topic: &str, payload: &Map<String, Value>) -> bool {
