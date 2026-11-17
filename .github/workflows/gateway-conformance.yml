@@ -1,17 +1,35 @@
-name: Gateway conformance
+name: CI
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  vectors:
+  gateway:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
+          persist-credentials: false
           path: miobots-heart
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
+          persist-credentials: false
           repository: Miobots/protocol
           path: miobots-protocol
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --manifest-path miobots-heart/src/mio_gateway/Cargo.toml -- --check
+      - run: cargo fmt --manifest-path miobots-heart/src/mio_safety_supervisor/Cargo.toml -- --check
       - run: cargo test --manifest-path miobots-heart/src/mio_gateway/Cargo.toml --locked
+      - run: miobots-heart/.claude/hooks/guard.test.sh
