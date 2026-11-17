@@ -103,6 +103,17 @@ def generate_launch_description():
         }]
     )
 
+    # 5. Safety supervisor (H2.3). The bridge forwards /cmd_vel_safe and nothing else, and this node
+    #    is the only thing that publishes it: without it the robot does not move. If it dies it
+    #    comes back having seen no command, which means it comes back publishing stop.
+    safety_supervisor = Node(
+        package='mio_safety_supervisor',
+        executable='mio_safety_supervisor',
+        output='screen',
+        respawn=True,
+        parameters=[{'use_sim_time': True}],
+    )
+
     return LaunchDescription([
         world_arg,
         x_arg,
@@ -115,4 +126,5 @@ def generate_launch_description():
         gz_sim_headless,
         spawn_robot,
         ros_gz_bridge,
+        safety_supervisor,
     ])

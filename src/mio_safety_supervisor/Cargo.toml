@@ -3,4 +3,9 @@ name = "mio_safety_supervisor"
 version = "0.0.0"
 edition = "2021"
 
+# Exact pins, with Cargo.lock committed: this is the veto layer, and it should not change under us.
+# Building needs a sourced ROS 2 Lyrical environment — rclrs links against it, and ros-env pulls in
+# the message types Lyrical ships as Rust (/opt/ros/lyrical/share/<pkg>/rust).
 [dependencies]
+rclrs = "=0.8.0"
+ros-env = "=0.3.0"

@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>mio_safety_supervisor</name>
+  <version>0.0.0</version>
+  <description>The veto layer: clamps drive commands and stops the wheels when they stop arriving. Rust.</description>
+  <maintainer email="rayyan1106adeel@gmail.com">Jalal Ahmed</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- cargo builds the node; these are what it links against and reads message types from. -->
+  <depend>geometry_msgs</depend>
+  <depend>rcl</depend>
+  <depend>rcl_action</depend>
+  <depend>rcl_yaml_param_parser</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
