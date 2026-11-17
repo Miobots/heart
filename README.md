@@ -21,6 +21,10 @@ ros2 launch mio_nav navigation.launch.py   # AMCL on the saved map + Nav2; click
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true   # /cmd_vel is TwistStamped
 ```
 
+**Hold the key to drive.** `sim.launch.py` also starts `mio_safety_supervisor`, which is the only
+thing the wheels listen to: it has the robot standing still within 400 ms of the last command, so
+a tap is a nudge.
+
 Phase 2 is under way: `H2.1` (AMCL and Nav2 goals) and `H2.2` (routing around a box dropped mid-run) run in simulation. `HANDOFF.md` has the details;
 the project's state is in the vault's `STATUS.md`.
 

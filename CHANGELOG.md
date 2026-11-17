@@ -5,6 +5,48 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-11-18 — H2.3: the safety supervisor, and Rust nodes without ros2_rust
+
+`src/mio_safety_supervisor` is no longer a scaffold. It subscribes `/cmd_vel`, clamps it, and is
+the only publisher of `/cmd_vel_safe`; the Gazebo bridge now forwards `/cmd_vel_safe` and nothing
+else. When commands go silent it publishes stop, on a monotonic clock, early enough that the robot
+is **standing still within 400 ms of the last command**: 250 ms of silence, then up to 150 ms of
+braking. `src/lib.rs` holds the decisions and has no ROS in it — that is what `cargo test` covers;
+`src/main.rs` is the glue. `sim.launch.py` starts the node, with `respawn`.
+
+Verified headless in Gazebo: a publisher killed mid-drive, ten runs across ±0.5 and ±0.3 m/s,
+±2.0 rad/s, and 0.5 m/s with −1.0 rad/s — robot standing still **308–382 ms** after the last
+command (stop out at 232–249 ms, braking 74–134 ms). A Nav2 goal driven through the supervisor
+still `SUCCEEDED`, and a supervisor killed with `kill -9` came back publishing stop.
+
+**Found:** `ros2_rust`'s colcon tooling (decision 31) is not needed. Lyrical ships its message
+types as Rust, and `rclrs` 0.8.0 + `ros-env` 0.3.0 build against it with plain cargo. A small
+`CMakeLists.txt` has cargo build the node inside `./build.sh`, so the package lost its
+`COLCON_IGNORE`. `cargo` is now needed to build the workspace.
+
+**Found:** waiting 400 ms and then stopping is not "stopped within 400 ms". The first version did
+that and the robot stood still at 590–613 ms, because the simulated drive (1.5 m/s², 3.0 rad/s²)
+needed 200 ms to brake from 0.30 m/s — and 333 and 667 ms from its limits, more than the whole
+promise. The 400 ms is now split: `stop_within_ms` 400 less `brake_ms` 150 leaves 250 ms of
+silence. The simulated drive brakes at 4.5 m/s² and 20 rad/s², and `max_linear` is 0.5 m/s. The
+supervisor refuses to start if braking leaves under 240 ms — two 100 ms teleop frames, so one lost
+frame is still never a stop.
+
+**Found:** braking that hard has a price. The drive's acceleration limits are also its brake
+limits, so a step command or a stop at full speed *while turning* can slip the wheels: heading
+from `/odom` was off by 0.0–1.8° against Gazebo over four such runs. Straight lines and spins on
+the spot stayed exact, and the old limits never slipped. Nav2 ramps its own commands; a keyboard
+does not. Ramping speed *increases* — in the supervisor or the MCU — would remove it.
+
+**Found:** `teleop_twist_keyboard` publishes once per key press, so with a deadman in the path
+keyboard driving is hold-to-drive, and a tap is a quarter-second nudge.
+
+**Found:** `ros2 launch` killed with SIGTERM exits and leaves every child running (4 of 4 here). A
+supervisor left over from an earlier run is a second publisher on `/cmd_vel_safe`. Stop launches
+with Ctrl-C; that was checked and leaves nothing behind.
+
+---
+
 ## 2026-10-01 — H2.2: routing around an unmapped box, and odometry that is honest in turns
 
 `mio_sim/models/obstacle_box.sdf` is a static 0.3 × 0.3 × 0.5 m box to drop in the robot's path
