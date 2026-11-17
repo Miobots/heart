@@ -29,6 +29,17 @@ frame. If you find yourself adding a velocity publisher to it, stop.
 inside the ROS graph. This is what makes "a language-model-adjacent process cannot command the
 wheels" a demonstrable property rather than an argument.
 
+**The wheels listen to `/cmd_vel_safe`, and only `mio_safety_supervisor` publishes it**
+(HEART_DECISIONS 47). Everything that wants to drive — Nav2, teleop, later the gateway — publishes
+`/cmd_vel`. Never bridge `/cmd_vel` to the motors, and never publish `/cmd_vel_safe` from anywhere
+else: either one removes the veto without anything failing.
+
+**400 ms is a promise about the wheels, not a timer.** The robot is standing still within 400 ms of
+the last command, so the supervisor waits `400 - brake_ms` of silence and braking gets the rest.
+`brake_ms`, `max_linear`, `max_angular` and the drive's own acceleration limits are **measured
+together**: raise a speed limit or weaken the brake and `brake_ms` is wrong until it is measured
+again. The supervisor refuses to start when braking leaves under 240 ms of silence.
+
 **Two safety layers, in a hierarchy, not peers.** The MCU cuts motors in hardware for cliff, bump
 and E-stop, and survives the Pi freezing entirely. The Rust supervisor clamps and vetoes what
 reaches the MCU but **cannot override it**. The MCU is final authority.
@@ -77,10 +88,12 @@ against pinned commits. Any document saying "Jazzy" is stale.
 | `mio_perception` | Object detection. **Advisory only** | write (Python permitted) |
 | `mio_msgs` | Interface definitions. No logic at all | definitions only |
 
-**The two Rust packages carry `COLCON_IGNORE` on purpose.** They are plain cargo crates for now;
-building them as ROS 2 packages needs `ros2_rust` (colcon-cargo + cargo-ament-build), which is not
-installed and is its own task. Delete the ignore file once that is set up. Until then `cargo build`
-works and colcon skips them, so the workspace still builds.
+**The Rust packages are plain cargo crates, and `./build.sh` builds them** (HEART_DECISIONS 47).
+`mio_safety_supervisor` has a small `CMakeLists.txt` that asks cargo to build and installs the
+binary, so there is no second build step to forget. It needs `cargo` on the PATH and uses `rclrs` +
+`ros-env` from crates.io; `ros2_rust`'s colcon tooling is **not** needed. Its tests are `cargo test`
+in the package directory, with ROS sourced. `mio_gateway` still carries `COLCON_IGNORE` and gets the
+same treatment at `H3.1`.
 
 **The architectural bet: sim and real are the same code.** Only the launch file and the driver
 packages differ — Gazebo plugins publish `/scan`, `/imu`, `/odom` in simulation; real drivers
@@ -100,9 +113,11 @@ world, manual driving, odometry (1.00 m commanded → 1.0002 m on `/odom`), the 
 saved SLAM map (`mio_nav/maps/home_arena`). Phase 2 has started: `H2.1` — `mio_nav navigation.launch.py`
 runs AMCL on the saved map plus Nav2 (stock `nav2_bringup`, our values in `config/nav2_params.yaml`
 marked `# mio:`), and `/cmd_vel` is `TwistStamped`; `H2.2` — it routes around a box dropped mid-run
-(`mio_sim/models/obstacle_box.sdf`), with no config change needed. **Not started:** everything from
-the safety supervisor on. `mio_gateway`
-and `mio_safety_supervisor` are stubs, and `mio_bringup` has no launch files yet.
+(`mio_sim/models/obstacle_box.sdf`), with no config change needed; `H2.3` — `mio_safety_supervisor`
+clamps `/cmd_vel` into `/cmd_vel_safe` and has the robot standing still within 400 ms of the last
+command (250 ms of silence, then up to 150 ms of braking), and `sim.launch.py` starts it. **Not started:** tip-over (`H2.4`) and everything after it. `mio_gateway`
+has the wire decoder and its conformance tests but its binary is still a scaffold, and `mio_bringup`
+has no launch files yet.
 
 The order, strictly: URDF → Gazebo spawn → manual driving → odometry → LiDAR → SLAM mapping →
 AMCL → Nav2 goals → obstacle avoidance → safety supervisor → exploration → gateway → outbox →
