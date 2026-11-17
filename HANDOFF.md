@@ -103,19 +103,42 @@ we deliberately did not build.
 **`H2.3` works in simulation, verified headless** on 2026-11-18. `mio_safety_supervisor` (Rust)
 sits between everything that drives and the wheels: Nav2 and teleop publish `/cmd_vel`, the
 supervisor clamps it into `/cmd_vel_safe`, and the Gazebo bridge forwards `/cmd_vel_safe` and
-nothing else. `sim.launch.py` starts it, so nothing about launching changes. Next is `H2.4`
-(tip-over) in the same node.
+nothing else. `sim.launch.py` starts it, so nothing about launching changes.
+
+**`H2.4` works in simulation, verified headless** on 2026-11-18, in the same node. It reads tilt
+off `/imu`. Past 30° for 100 ms it stops the wheels, then reports `TIP_OVER` on `/diagnostics`, and
+stays locked — with drive commands still arriving — until `~/clear` is called with the robot
+upright for a second. Next is `H3.1`, the gateway.
+
+- **Measured**, three times, with a 20 Hz publisher never stopping: robot dropped on its side →
+  stop published 80–120 ms after the tilt passed 30° (message stamps, so simulation time; the hold
+  is 100 ms of wall time), `TIP_OVER` reported 13–15 ms after the stop. Set
+  upright again: 0 of 210 messages on `/cmd_vel_safe` non-zero, `/odom` moved 0 mm. `~/clear` on
+  its side: refused, "still tipped". `~/clear` upright: "unlocked", and it drove on at 0.30 m/s.
+- **No IMU, no motion.** A silent IMU is a fault of its own (`IMU_NO_DATA`): pausing the
+  simulation stopped the wheels and unpausing freed them, with no one clearing anything. So is an
+  IMU that says it does not know its orientation — covariance `-1`, which is what a bare MPU6050
+  driver sends. **On hardware the supervisor will not move the robot until something publishes a
+  fused orientation** (`H5.2`).
+- **To tip the simulated robot:** `gz service -s /world/home_arena/set_pose --reqtype gz.msgs.Pose
+  --reptype gz.msgs.Boolean --timeout 3000 --req 'name: "mio", position: {x: 0.5, z: 0.3},
+  orientation: {x: 0.5646, w: 0.8253}'`. To clear: `ros2 service call /mio_safety_supervisor/clear
+  std_srvs/srv/Trigger`.
+- **The lock is in memory.** A supervisor that restarts comes back unlocked unless the robot is
+  still tilted. Announcing aloud and reporting to the Brain are `H4.x` and `H3.1`; this only puts
+  the fault where they can hear it.
 
 - **Measured:** a 20 Hz publisher killed with `kill -9` mid-drive, ten runs across ±0.5 and
-  ±0.3 m/s, ±2.0 rad/s, and 0.5 m/s with −1.0 rad/s. The robot was standing still **308–382 ms**
-  after the last command: the stop went out at 232–249 ms and braking took 74–134 ms.
-- **400 ms is split, not waited.** The supervisor waits 250 ms of silence (`stop_within_ms` 400
-  less `brake_ms` 150) and the drive brakes in the rest. For that the simulated drive's
+  ±0.3 m/s, ±2.0 rad/s, and 0.5 m/s with −1.0 rad/s. The robot was standing still **283–357 ms**
+  after the last command: the stop went out at 222–240 ms and braking took 61–118 ms. Read
+  standstill off the *position* on `/odom`; its speed is a 20 ms average and reads zero a sample late.
+- **400 ms is split, not waited.** The supervisor waits 240 ms of silence (`stop_within_ms` 400
+  less `brake_ms` 160) and the drive brakes in the rest. For that the simulated drive's
   acceleration limits went from 1.5 m/s² and 3.0 rad/s² to 4.5 and 20, and `max_linear` is
   0.5 m/s. **Those four numbers are one measurement** — on hardware, measure braking first (`H5.5`),
   then set `brake_ms`. If braking leaves under 240 ms of silence the supervisor will not start.
 - **The price of braking that hard:** a step command or a stop at full speed *while turning* can
-  slip the wheels. Heading from `/odom` was off by 0.0–1.8° against Gazebo over four runs at
+  slip the wheels. Heading from `/odom` was off by 0.0–1.8° against Gazebo over six runs at
   0.5 m/s with −1.0 rad/s; straight lines and spins on the spot stayed exact (0 mm, 0.0°), and the
   old limits never slipped. Nav2 ramps its own commands and is not affected; a keyboard is.
 - **Teleop is hold-to-drive now.** `teleop_twist_keyboard` publishes once per key press, so a tap
