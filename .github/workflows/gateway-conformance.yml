@@ -1,0 +1,17 @@
+name: Gateway conformance
+
+on: [push, pull_request]
+
+jobs:
+  vectors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: miobots-heart
+      - uses: actions/checkout@v4
+        with:
+          repository: Miobots/protocol
+          path: miobots-protocol
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --manifest-path miobots-heart/src/mio_gateway/Cargo.toml --locked
