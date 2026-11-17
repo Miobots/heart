@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>mio_gateway</name>
+  <version>0.0.0</version>
+  <description>The only node that speaks to the Brain: turns its commands into Nav2 goals and reports back. Rust.</description>
+  <maintainer email="rayyan1106adeel@gmail.com">Jalal Ahmed</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- cargo builds the node; these are what it links against and reads message types from. -->
+  <depend>diagnostic_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <depend>rcl</depend>
+  <depend>rcl_action</depend>
+  <depend>rcl_yaml_param_parser</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

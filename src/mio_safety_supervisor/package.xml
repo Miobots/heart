@@ -9,7 +9,10 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <!-- cargo builds the node; these are what it links against and reads message types from. -->
+  <depend>diagnostic_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_srvs</depend>
   <depend>rcl</depend>
   <depend>rcl_action</depend>
   <depend>rcl_yaml_param_parser</depend>

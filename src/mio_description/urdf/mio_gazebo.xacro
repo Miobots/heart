@@ -79,8 +79,8 @@
 
       <!-- Limits.
            The acceleration limits are also how hard this drive brakes, and the safety supervisor
-           budgets for it: its `brake_ms` is 150, and from a stop command to standstill measured
-           119-134 ms at 0.5 m/s and at 2.0 rad/s with these numbers (0.5 / 4.5 and 2.0 / 20 are
+           budgets for it: its `brake_ms` is 160, and from a stop command to standstill measured
+           98-118 ms at 0.5 m/s and at 2.0 rad/s with these numbers (0.5 / 4.5 and 2.0 / 20 are
            111 and 100 ms; the rest is the bridge and a simulation step). Change them and braking
            has to be measured again (HEART_DECISIONS 47). They were 1.5 and 3.0, which took 333
            and 667 ms to stop: longer than the whole 400 ms promise.
