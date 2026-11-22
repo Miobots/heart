@@ -9,7 +9,7 @@
 1. **Sole Physical Authority:** Only Heart moves mass or commands motors.
 2. **Two-Tier Safety Hierarchy:**
    - Layer 1 (MCU Hardware): Cuts motor power on hardware bump or UART silence (survives Pi freeze).
-   - Layer 2 (Rust Safety Supervisor): deadman — robot standing still within 400ms of the last command — and IMU tip-over veto.
+   - Layer 2 (Rust Safety Supervisor): deadman — robot standing still within 400ms of the last command — and the IMU tip-over latch: past 30° of tilt it halts, *then* reports `TIP_OVER` on `/diagnostics`, and stays locked until `~/clear` is called with the robot upright. No usable IMU data means no motion (HEART_DECISIONS 48).
 3. **Cliff Sensor Rule:** Cliff drop-off detection stops robot immediately and writes permanent no-go zone into costmap.
 4. **Halt-Then-Run Local Voice:** If local 1B model runs during navigation, pause navigation, generate answer, unload model, and resume navigation.
 5. **Durable Outbox (`mio_gateway`):** Events queue to disk during network dropouts and drain in order upon reconnection.
@@ -48,7 +48,7 @@ ros2 launch mio_nav mapping.launch.py
 ros2 launch mio_nav navigation.launch.py
 
 # Drive by hand — /cmd_vel is TwistStamped, because Nav2 on Lyrical publishes stamped.
-# HOLD the key: the supervisor stops the wheels after 250 ms of silence, so a tap is a nudge.
+# HOLD the key: the supervisor stops the wheels after 240 ms of silence, so a tap is a nudge.
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true   # /cmd_vel is TwistStamped
 
 # Safety supervisor tests (the node itself is built by ./build.sh and started by sim.launch.py)

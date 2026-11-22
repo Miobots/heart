@@ -5,6 +5,32 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-11-18 — H2.4: the tip-over lock, and 10 ms more room for the 400 ms stop
+
+`mio_safety_supervisor` now reads tilt off `/imu`. Past 30° for 100 ms it stops the wheels, **then**
+reports `TIP_OVER` on `/diagnostics`, and stays locked until `~/clear` (`std_srvs/Trigger`) is
+called with the robot upright for a second. Halt first, report second: the stop goes out in the
+IMU callback, the report on the watchdog's next tick.
+
+Verified headless in Gazebo, three times, with drive commands arriving the whole time: dropped on
+its side → stop published 80–120 ms after the tilt passed 30°, report 13–15 ms after the stop; set upright
+→ 0 of 210 messages on `/cmd_vel_safe` non-zero and 0 mm on `/odom`; `~/clear` on its side refused,
+upright accepted, and it drove on.
+
+**Decided:** no usable IMU data means no motion. A silent IMU is its own fault (`IMU_NO_DATA`) and
+clears itself when the IMU has been back for 100 ms; so is an orientation marked unknown (REP 145,
+covariance `-1`). A subsystem that stops reporting is failed, not quiet (HEART_SPEC R9).
+
+**Decided:** faults go out as `diagnostic_msgs` on `/diagnostics`, once a second and at once on a
+change — ROS's own mechanism, not a new message. `mio_msgs` stays empty.
+
+**Found:** the 400 ms stop had less room than the first measurement said. "Still" was read off the
+speed on `/odom`, which is a 20 ms average and reads zero one sample late; a later top-speed run
+read 409 ms, 389 by position. `brake_ms` is now 160 and silence 240 ms — the floor — and ten runs
+measured by position stood still at **283–357 ms**.
+
+---
+
 ## 2026-11-18 — H2.3: the safety supervisor, and Rust nodes without ros2_rust
 
 `src/mio_safety_supervisor` is no longer a scaffold. It subscribes `/cmd_vel`, clamps it, and is
