@@ -5,6 +5,38 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-11-23 — H3.2: the durable outbox
+
+`mio_gateway` keeps every event on disk until the Brain confirms it. An event — `nav.result`,
+`diag.fault`, whatever `queues_in_outbox` names — is a file in `outbox_dir` before it is on the wire,
+and leaves only when an `ACK sys.receipt` names its `msg_id` (ENVELOPE §8). Whatever the Brain has
+not confirmed goes out again, oldest first, after every welcome, with its `msg_id` and both clocks
+and a fresh `seq`. This replaces the hundred facts held in memory since H3.1.
+
+`src/outbox.rs` is the disk: one file per event, numbered rather than named by `msg_id` (whose time
+half follows a wall clock that can jump back), written beside its name, flushed, renamed into place
+and the directory flushed. `session.rs` still decides everything and does no I/O: it says
+`Out::Store` before the `Out::Send` of the same event and `Out::Forget` on a receipt, and `main.rs`
+does both — including during an outage, where it used to drop what the session said.
+
+Verified with the real node and the real Brain (`feat/event-receipts`): with no Brain and no
+supervisor the gateway raised `SAFETY_SUPERVISOR_NO_DATA` and stored it; `kill -9`; the file was
+still there; Brain up, gateway restarted — "1 event(s) still waiting", let in, sent, and deleted on
+the receipt. `cargo test`: 25 library tests and 3 conformance tests.
+
+**Decided:** progress (`nav.feedback`) never waits, nor do heartbeats or the manifest — stale a
+moment later, and a fsynced write a second while driving would wear the card for nothing. The
+protocol said progress queues; it now agrees (`miobots-protocol` `conformance/outbox.json`, which
+the conformance test holds this side to).
+
+**Found:** the Brain never sent `sys.receipt`, so an outbox could never have been trimmed. It does
+now (brain `feat/event-receipts`), and acts on a re-sent copy once.
+
+**Found:** the gateway does not stop on SIGINT, before this change as well as after; SIGTERM stops
+it. With the outbox that costs a slow shutdown, not events.
+
+---
+
 ## 2026-11-18 — H3.1: the gateway dials the Brain and drives the simulated robot
 
 `src/mio_gateway` is no longer a scaffold. It dials the Brain over WebSocket, says hello, and turns

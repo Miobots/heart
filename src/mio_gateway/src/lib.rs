@@ -1,8 +1,10 @@
 //! Rust side of the shared MioBots wire contract. The vectors live in miobots-protocol.
 //!
 //! This library needs no ROS: `cargo test` runs it anywhere, which is what CI does. `session` is
-//! what the gateway does with the contract; the ROS node is the binary, behind the `ros` feature.
+//! what the gateway does with the contract; `outbox` keeps its events on disk until the Brain
+//! confirms them. The ROS node is the binary, behind the `ros` feature.
 
+pub mod outbox;
 pub mod session;
 
 use serde_json::{Map, Value};
@@ -153,6 +155,24 @@ fn kinds_for(topic: &str) -> Option<&'static [&'static str]> {
 /// never guessed at (ENVELOPE §9).
 pub fn known_topic(topic: &str) -> bool {
     kinds_for(topic).is_some()
+}
+
+/// Events that never wait in the outbox: each is re-sent anyway or is stale a moment later
+/// (ENVELOPE §5). `miobots-protocol/conformance/outbox.json` is the list the Brain confirms by, and
+/// the conformance test holds this one to it.
+const NEVER_QUEUED: [&str; 6] = [
+    "sys.heartbeat",
+    "cap.manifest",
+    "sys.devices",
+    "nav.feedback",
+    "mcp.response",
+    "mcp.notification",
+];
+
+/// Whether a message waits in the durable outbox until the Brain confirms it: a fact does; a
+/// reading, an answer or a command does not.
+pub fn queues_in_outbox(kind: &str, topic: &str) -> bool {
+    kind == "EVT" && !NEVER_QUEUED.contains(&topic)
 }
 
 fn allowed_kind(topic: &str, kind: &str) -> bool {

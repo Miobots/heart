@@ -7,15 +7,18 @@
 //!
 //! The Brain's address and the token come from the environment, under the names the Fake Heart
 //! uses: `BRAIN_URL`, `DEV_TOKEN`, `DEVICE_ID`. The token is not a ROS parameter because anything
-//! on the graph can read those.
+//! on the graph can read those. Events wait on disk for the Brain in the `outbox_dir` parameter,
+//! by default `$XDG_STATE_HOME/mio_gateway/outbox` (H3.2).
 
 use futures::{SinkExt, StreamExt};
+use mio_gateway::outbox::Outbox;
 use mio_gateway::session::{Ended, Now, Out, Pose, Robot, Session};
 use rclrs::*;
 use ros_env::diagnostic_msgs::msg::{DiagnosticArray, DiagnosticStatus};
 use ros_env::geometry_msgs::msg::PoseWithCovarianceStamped;
 use ros_env::nav2_msgs::action::{NavigateToPose, NavigateToPose_Goal};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
@@ -84,6 +87,47 @@ fn regions(path: &str, logger: &Logger) -> HashMap<String, Pose> {
     }
 }
 
+/// Where events wait for the Brain: the robot's state, apart from the source and the build.
+fn default_outbox_dir() -> String {
+    std::env::var("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .or_else(|_| std::env::var("HOME").map(|home| PathBuf::from(home).join(".local/state")))
+        .map(|base| base.join("mio_gateway/outbox").display().to_string())
+        .unwrap_or_default()
+}
+
+/// Keeps the files in step with the session. A disk that fails costs durability, not the link:
+/// the event is still in memory and still sent — less capable, not broken.
+/// ponytail: blocking writes on the link's thread, a few ms each on an SD card; the robot half
+/// runs on its own thread and never waits for them.
+fn keep(outbox: &mut Option<Outbox>, out: &Out, logger: &Logger) {
+    match out {
+        Out::Store(event) => {
+            if let Some(Err(e)) = outbox.as_mut().map(|disk| disk.put(event)) {
+                log_error!(
+                    logger,
+                    "an event is not on disk, so a restart would lose it: {e}"
+                );
+            }
+        }
+        Out::Forget { msg_ids, confirmed } => {
+            if !confirmed {
+                log_error!(
+                    logger,
+                    "the outbox is full: dropped the oldest event ({}) unconfirmed",
+                    msg_ids.join(", ")
+                );
+            }
+            for id in msg_ids {
+                if let Some(Err(e)) = outbox.as_mut().map(|disk| disk.remove(id)) {
+                    log_warn!(logger, "could not delete confirmed event {id}: {e}");
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 fn main() -> Result<(), RclrsError> {
     let start = Instant::now();
     let mut executor = Context::default_from_env()?.create_basic_executor();
@@ -106,6 +150,11 @@ fn main() -> Result<(), RclrsError> {
         .read_only()?
         .get();
     let places = regions(&regions_file, &logger);
+    let outbox_dir: Arc<str> = node
+        .declare_parameter("outbox_dir")
+        .default(default_outbox_dir().into())
+        .read_only()?
+        .get();
     log_info!(
         &logger,
         "dialling {url} as {device_id}, with {} named place(s)",
@@ -116,14 +165,43 @@ fn main() -> Result<(), RclrsError> {
     let (to_link, from_robot) = unbounded_channel::<FromRobot>();
 
     // ---- the link half ------------------------------------------------------------------------
-    let session = Session::new(&device_id, &token, places);
+    let mut session = Session::new(&device_id, &token, places);
+    let outbox = match Outbox::open(&*outbox_dir) {
+        Ok(opened) => {
+            for bad in &opened.unreadable {
+                log_error!(&logger, "not an event, moved aside: {}", bad.display());
+            }
+            log_info!(
+                &logger,
+                "outbox at {outbox_dir}: {} event(s) still waiting for the Brain",
+                opened.waiting.len()
+            );
+            session.restore(opened.waiting);
+            Some(opened.outbox)
+        }
+        Err(e) => {
+            log_error!(
+                &logger,
+                "no outbox at '{outbox_dir}' ({e}): events wait in memory only, and a restart loses them"
+            );
+            None
+        }
+    };
     let link_logger = logger.clone();
     std::thread::spawn(move || {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("a runtime for the link")
-            .block_on(link(url, session, start, to_robot, from_robot, link_logger));
+            .block_on(link(
+                url,
+                session,
+                outbox,
+                start,
+                to_robot,
+                from_robot,
+                link_logger,
+            ));
     });
 
     // ---- the robot half -----------------------------------------------------------------------
@@ -282,6 +360,7 @@ fn heard(session: &mut Session, event: FromRobot, now: Now) -> Vec<Out> {
 async fn link(
     url: String,
     mut session: Session,
+    mut outbox: Option<Outbox>,
     start: Instant,
     to_robot: UnboundedSender<Robot>,
     mut from_robot: UnboundedReceiver<FromRobot>,
@@ -295,6 +374,7 @@ async fn link(
                 let why = talk(
                     socket,
                     &mut session,
+                    &mut outbox,
                     start,
                     &to_robot,
                     &mut from_robot,
@@ -314,11 +394,15 @@ async fn link(
         tokio::pin!(pause);
         wait = (wait.mul_f64(1.5)).min(Duration::from_secs(10));
         // The robot does not stop for an outage. What it says while the link is down still changes
-        // what is known, and a goal that ends is held for the next connection.
+        // what is known, and an event — a goal that ends, a fault — goes on disk for the next one.
         loop {
             tokio::select! {
                 _ = &mut pause => break,
-                Some(event) = from_robot.recv() => { heard(&mut session, event, now(start)); }
+                Some(event) = from_robot.recv() => {
+                    for out in heard(&mut session, event, now(start)) {
+                        keep(&mut outbox, &out, &logger);
+                    }
+                }
             }
         }
     }
@@ -328,6 +412,7 @@ async fn link(
 async fn talk<S>(
     socket: tokio_tungstenite::WebSocketStream<S>,
     session: &mut Session,
+    outbox: &mut Option<Outbox>,
     start: Instant,
     to_robot: &UnboundedSender<Robot>,
     from_robot: &mut UnboundedReceiver<FromRobot>,
@@ -373,6 +458,8 @@ where
                     let _ = write.close().await;
                     return why;
                 }
+                // Before the Send of the same event: on disk before it is on the wire.
+                out @ (Out::Store(_) | Out::Forget { .. }) => keep(outbox, &out, logger),
             }
         }
     }

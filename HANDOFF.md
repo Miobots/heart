@@ -1,6 +1,6 @@
 # Handoff — Heart
 
-**Last updated:** 2026-11-18 (the `H2.3`, `H2.4` and `H3.1` sections under "Next step"; the rest is as of 2026-10-01)
+**Last updated:** 2026-11-23 (the `H3.2` section under "Next step"; `H2.3`, `H2.4` and `H3.1` as of 2026-11-18; the rest as of 2026-10-01)
 **Status:** Phase 0.1 and Phase 1 are on `main` — the source build, the URDF, the Gazebo Jetty
 world, the slam_toolbox pipeline and the saved `home_arena` map. The 2026-08-14 note below said
 this work was "committed on `stb/lyrical_source_build`, not pushed"; it merged as PR #1.
@@ -100,6 +100,28 @@ we deliberately did not build.
 
 ## Next step
 
+**`H3.2` — the durable outbox — works, checked with the real node and the real Brain** on
+2026-11-23. Every event (`nav.result`, `diag.fault`; whatever `queues_in_outbox` names) is a file in
+`outbox_dir` before it is sent, and the file goes only when the Brain's `ACK sys.receipt` names it.
+Unconfirmed events go out again, oldest first, after every welcome. Next is `H3.3`: the same in
+Gazebo, with a goal in flight across a Brain restart, recorded.
+
+- **Where:** the `outbox_dir` parameter, default `$XDG_STATE_HOME/mio_gateway/outbox`, else
+  `~/.local/state/mio_gateway/outbox`. One `00000000000000000007.json` per event, numbered in the
+  order they happened; `ls` it to see what the Brain has not confirmed. A file that is not an event
+  is renamed `*.bad` and logged, never deleted. If the directory cannot be opened, the gateway
+  says so and keeps events in memory only.
+- **Checked:** no Brain running and no supervisor, so the gateway raised `SAFETY_SUPERVISOR_NO_DATA`
+  after 3 s and put it on disk; killed with `kill -9`; the file was still there. Then the Brain
+  (with receipts, brain `feat/event-receipts`) started and the gateway restarted: it logged "1
+  event(s) still waiting", was let in, sent it, and the file was deleted on the receipt — as was
+  the new run's own fault.
+- **Never queued:** progress, heartbeats and the manifest — they are stale a moment later
+  (`miobots-protocol/conformance/outbox.json`, which the conformance test holds this side to).
+- **Cap:** 10 000 events. At the cap the oldest is dropped and logged as an error.
+- **The node does not stop on Ctrl-C (SIGINT); SIGTERM stops it.** `ros2 launch` sends SIGINT,
+  then SIGTERM after its timeout. With the outbox that costs time, not events.
+
 **`H2.3` works in simulation, verified headless** on 2026-11-18. `mio_safety_supervisor` (Rust)
 sits between everything that drives and the wheels: Nav2 and teleop publish `/cmd_vel`, the
 supervisor clamps it into `/cmd_vel_safe`, and the Gazebo bridge forwards `/cmd_vel_safe` and
@@ -118,8 +140,7 @@ DEV_TOKEN=<the Brain's DEV_TOKEN> BRAIN_URL=ws://127.0.0.1:8080/ws \
   ros2 launch mio_nav navigation.launch.py gateway:=true
 ```
 
-`DEVICE_ID` defaults to `heart-01`. Without `DEV_TOKEN` it refuses to start. Next is `H3.2`, the
-durable outbox.
+`DEVICE_ID` defaults to `heart-01`. Without `DEV_TOKEN` it refuses to start.
 
 - **What it does.** `nav.goto` becomes a Nav2 `NavigateToPose` goal, by coordinates or by a name
   looked up in `mio_nav/maps/home_arena.regions.json`. The ACK says what Nav2 said. Progress goes
@@ -137,8 +158,7 @@ durable outbox.
   in flight (the result arrived after reconnecting, stamped with when it happened), and a tip-over
   (reported, goals refused, cleared, driving back). Every message the gateway sent was parsed by
   the TypeScript codec the Brain uses: 36–38 messages a run, none invalid.
-- **Not done.** No durable outbox: a result that happens during an outage waits in memory and is
-  lost if the gateway restarts (`H3.2`). No pose, battery or map goes to the app. `voice.speak` is
+- **Not done.** No pose, battery or map goes to the app. `voice.speak` is
   refused, `local_voice_unavailable`. `ws://` only — no TLS is compiled in. "Go to the kitchen"
   through the Brain's language model was not run; that is `B2.6`, and it needs a model key.
 - **The named places are a stand-in.** Two points typed into a file, inside the 2 m patch the saved
