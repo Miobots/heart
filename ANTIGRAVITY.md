@@ -15,7 +15,7 @@
 5. **Durable Outbox (`mio_gateway`):** Events queue to disk during network dropouts and drain in order upon reconnection.
 6. **Wheels Listen To `/cmd_vel_safe` Only:** Nav2, teleop and (later) the gateway publish `/cmd_vel`; only `mio_safety_supervisor` publishes `/cmd_vel_safe` — clamped, and stopped when commands go silent. Never bridge `/cmd_vel` to the motors or publish `/cmd_vel_safe` from anywhere else (HEART_DECISIONS 47).
 7. **400 ms Is A Promise About The Wheels, Not A Timer:** Standing still within 400 ms of the last command, so the supervisor waits `400 - brake_ms` of silence and braking gets the rest. `brake_ms`, `max_linear`, `max_angular` and the drive's acceleration limits are measured together — change one and `brake_ms` must be measured again. The supervisor refuses to start when braking leaves under 240 ms of silence (HEART_DECISIONS 47).
-8. **Rust Packages Build With `./build.sh`:** `mio_safety_supervisor` is a plain cargo crate that a small `CMakeLists.txt` builds and installs; it needs `cargo` on the PATH. `ros2_rust`'s colcon tooling is not needed. `mio_gateway` keeps `COLCON_IGNORE` until `H3.1` (HEART_DECISIONS 47).
+8. **Rust Packages Build With `./build.sh`:** `mio_safety_supervisor` is a plain cargo crate that a small `CMakeLists.txt` builds and installs; it needs `cargo` on the PATH. `ros2_rust`'s colcon tooling is not needed (HEART_DECISIONS 47). `mio_gateway` is built the same way, and its library needs no ROS: the wire contract (`lib.rs`) and everything the gateway decides (`session.rs`) are plain Rust that CI tests against the shared vectors; the ROS node is the binary behind the `ros` feature. Logic goes in `session.rs`, never in `main.rs`. The gateway has no velocity publisher, and its token comes from the environment (`DEV_TOKEN`), never a ROS parameter or a default in code (HEART_DECISIONS 49).
 
 ---
 
@@ -53,6 +53,12 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true
 
 # Safety supervisor tests (the node itself is built by ./build.sh and started by sim.launch.py)
 cd src/mio_safety_supervisor && cargo test
+
+# Let the Brain drive: the same launch, plus the gateway dialling out
+DEV_TOKEN=... BRAIN_URL=ws://<brain>:8080/ws ros2 launch mio_nav navigation.launch.py gateway:=true
+
+# Gateway tests — no ROS needed, this is what CI runs
+cd src/mio_gateway && cargo test
 
 # Run on hardware — not written yet; mio_bringup has no launch files until Phase 5
 # ros2 launch mio_bringup real.launch.py

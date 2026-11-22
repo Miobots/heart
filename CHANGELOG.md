@@ -5,6 +5,44 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-11-18 — H3.1: the gateway dials the Brain and drives the simulated robot
+
+`src/mio_gateway` is no longer a scaffold. It dials the Brain over WebSocket, says hello, and turns
+`nav.goto` into a Nav2 goal — by coordinates, or by a name looked up in
+`mio_nav/maps/home_arena.regions.json` — then sends the ACK Nav2 gave, progress once a second and
+the result. It also sends a heartbeat every 5 s, the robot's half of the capability manifest, and
+the supervisor's faults as `diag.fault`. `navigation.launch.py gateway:=true` starts it.
+
+`src/session.rs` holds every decision and has no socket and no ROS in it; `src/main.rs` moves
+messages between the socket, Nav2 and the supervisor. The library needs no ROS, so CI keeps testing
+it with plain `cargo test`; the node is behind the `ros` feature.
+
+Verified headless against the real Brain on a spare port: an app-role client asked for `(1.0, 0)`
+and for `"Living Room"`, the Brain relayed both, the robot drove to x = 0.79 and then x = −1.42,
+and the Brain logged 13 valid `nav.feedback` and 2 valid `nav.result`. And against a scripted
+Brain, 35 checks: retry, cancel, refusals, a 20 s outage, a tip-over.
+
+**Found:** the Brain does not do what ENVELOPE.md says in several places, and the gateway follows
+the Brain. It cancels on a new `corr_id` and names the goal in the payload. It sends a room's name
+and no coordinates. It never retries a command, never sends `sys.error` or `sys.receipt`, and
+ignores an `ERR` — so an unsupported command is refused with an ACK, which it hears at once. Its
+check on `nav.result` needs a `final_pose`, always. The list is in HEART_DECISIONS 49.
+
+**Found:** Nav2 reports 0 m remaining until it has planned a path. Passed on, the first progress
+message said "arrived" a second after the robot was asked to leave. Not forwarded now.
+
+**Found:** an event held while the link was still connecting used up a `seq`, leaving a gap on the
+wire. The stand-in Brain's check for gaps caught it; a held event is numbered when it is sent.
+
+**Found:** a goal stamped with the gateway's clock would be in Nav2's future in simulation. Goals
+go out unstamped, which Nav2 reads as "now".
+
+**Found:** the simulated house's bedroom has no door.
+
+**Not explained:** Nav2 failed to finish starting twice in about two dozen bring-ups. See HANDOFF.
+
+---
+
 ## 2026-11-18 — H2.4: the tip-over lock, and 10 ms more room for the 400 ms stop
 
 `mio_safety_supervisor` now reads tilt off `/imu`. Past 30° for 100 ms it stops the wheels, **then**
