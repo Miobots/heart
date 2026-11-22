@@ -5,6 +5,24 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-11-23 — H3.3: the outbox, proven in Gazebo across an outage
+
+`src/mio_gateway/scripts/outbox_proof.sh` runs the whole thing headless and checks it: Gazebo, Nav2,
+the supervisor, this gateway and the real Brain, on their own ROS domain and Gazebo partition, with
+`wiretap.ts` (Bun, no dependencies) between gateway and Brain writing down every message and
+`app_goal.ts` playing the app. The Brain is killed while the robot drives to the living room; the
+drive ends (`success: true`) and the robot is tipped over with no Brain; the gateway is `kill -9`ed
+and restarted; and when the Brain returns, every stored event crosses once, in order, with the time
+it happened, and is confirmed before it leaves the disk. All checks passed.
+
+**Found:** a loaded machine fails it. With another process on four cores, Gazebo fell behind real
+time, the supervisor called the IMU silent, and Nav2's answer missed the gateway's 5 s.
+
+**Found (Brain):** a goal started from the app is not one the Brain tracks; its progress and result
+are logged as "unmatched" and dropped.
+
+---
+
 ## 2026-11-23 — H3.2: the durable outbox
 
 `mio_gateway` keeps every event on disk until the Brain confirms it. An event — `nav.result`,

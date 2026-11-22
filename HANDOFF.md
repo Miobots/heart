@@ -1,6 +1,6 @@
 # Handoff — Heart
 
-**Last updated:** 2026-11-23 (the `H3.2` section under "Next step"; `H2.3`, `H2.4` and `H3.1` as of 2026-11-18; the rest as of 2026-10-01)
+**Last updated:** 2026-11-23 (the `H3.3` and `H3.2` sections under "Next step"; `H2.3`, `H2.4` and `H3.1` as of 2026-11-18; the rest as of 2026-10-01)
 **Status:** Phase 0.1 and Phase 1 are on `main` — the source build, the URDF, the Gazebo Jetty
 world, the slam_toolbox pipeline and the saved `home_arena` map. The 2026-08-14 note below said
 this work was "committed on `stb/lyrical_source_build`, not pushed"; it merged as PR #1.
@@ -100,11 +100,39 @@ we deliberately did not build.
 
 ## Next step
 
+**`H3.3` — the outbox proven in Gazebo** on 2026-11-23, with a script anyone can re-run:
+
+```bash
+src/mio_gateway/scripts/outbox_proof.sh [output dir]   # needs miobots-brain and miobots-protocol beside
+                                                        # this repo, ./build.sh, and the gateway built
+                                                        # with `cargo build --features ros`
+```
+
+It runs headless Gazebo, Nav2, the supervisor, this gateway and the real Brain on their own ROS
+domain and Gazebo partition, with `scripts/wiretap.ts` between gateway and Brain writing down every
+message. An app (`scripts/app_goal.ts`) asks for the living room; the Brain is killed the moment
+progress flows; the robot finishes the drive (`success: true`, 7.8 s, at x = −1.36) and is then
+tipped over — both events on disk, nothing on the wire; the gateway is `kill -9`ed and restarted
+("2 event(s) still waiting", and its own fresh `TIP_OVER` makes three); 8 s more and nothing has
+left the disk. The Brain comes back: the three crossed once each, in the order they happened, each
+with the time it happened (12, 11 and 8 s before it crossed), the Brain confirmed all three, and
+the outbox emptied. Every check prints PASS or FAIL; the script exits non-zero on any FAIL. It
+passed on two runs in a row; the figures here are from the first.
+
+- **It needs a quiet machine.** The first run failed while another process held four cores:
+  Gazebo fell behind real time, the supervisor (rightly) called the IMU silent, and Nav2's answer
+  missed the 5 s the gateway gives it. A loaded machine fails it; that is the simulator, not the
+  outbox.
+- **Found (Brain):** a goal started from the app — a map tap — is not one the Brain tracks, so it
+  logs that goal's progress and result as "unmatched" and drops them. Only goals its own agent
+  starts are followed. Not a Heart problem; the app does not see map-tap progress until it is fixed.
+- **Not done here:** on hardware. The gateway and outbox are the same code there; the script is not
+  — it launches Gazebo and tips the robot through it. The real-robot run is part of `B4.4` (I4).
+
 **`H3.2` — the durable outbox — works, checked with the real node and the real Brain** on
 2026-11-23. Every event (`nav.result`, `diag.fault`; whatever `queues_in_outbox` names) is a file in
 `outbox_dir` before it is sent, and the file goes only when the Brain's `ACK sys.receipt` names it.
-Unconfirmed events go out again, oldest first, after every welcome. Next is `H3.3`: the same in
-Gazebo, with a goal in flight across a Brain restart, recorded.
+Unconfirmed events go out again, oldest first, after every welcome.
 
 - **Where:** the `outbox_dir` parameter, default `$XDG_STATE_HOME/mio_gateway/outbox`, else
   `~/.local/state/mio_gateway/outbox`. One `00000000000000000007.json` per event, numbered in the

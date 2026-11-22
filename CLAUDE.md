@@ -139,8 +139,9 @@ Nav2 goal and sends progress and the result back, reports the supervisor's fault
 the robot can do (`navigation.launch.py gateway:=true`); it remembers command keys for ten minutes
 and sends a heartbeat every 5 s, which is `H3.4`; `H3.2` — every event waits on disk in the
 `outbox_dir` parameter (default `~/.local/state/mio_gateway/outbox`) until the Brain confirms it, and
-survives the gateway being killed. **Not started:** `H3.3` (a recorded outage with a goal in flight,
-in Gazebo), telemetry to the app (pose, battery, map), speech, and everything after. `mio_bringup` has no launch files yet.
+survives the gateway being killed; `H3.3` — `src/mio_gateway/scripts/outbox_proof.sh` proves it in
+Gazebo across a Brain outage with a goal in flight. **Not started:** telemetry to the app (pose,
+battery, map), speech, and everything after. `mio_bringup` has no launch files yet.
 
 The order, strictly: URDF → Gazebo spawn → manual driving → odometry → LiDAR → SLAM mapping →
 AMCL → Nav2 goals → obstacle avoidance → safety supervisor → exploration → gateway → outbox →
