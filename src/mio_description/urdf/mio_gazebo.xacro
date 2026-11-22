@@ -77,11 +77,23 @@
       <wheel_separation>${wheel_separation}</wheel_separation>
       <wheel_radius>${wheel_radius}</wheel_radius>
 
-      <!-- Limits -->
-      <max_linear_acceleration>1.5</max_linear_acceleration>
-      <min_linear_acceleration>-1.5</min_linear_acceleration>
-      <max_angular_acceleration>3.0</max_angular_acceleration>
-      <min_angular_acceleration>-3.0</min_angular_acceleration>
+      <!-- Limits.
+           The acceleration limits are also how hard this drive brakes, and the safety supervisor
+           budgets for it: its `brake_ms` is 160, and from a stop command to standstill measured
+           98-118 ms at 0.5 m/s and at 2.0 rad/s with these numbers (0.5 / 4.5 and 2.0 / 20 are
+           111 and 100 ms; the rest is the bridge and a simulation step). Change them and braking
+           has to be measured again (HEART_DECISIONS 47). They were 1.5 and 3.0, which took 333
+           and 667 ms to stop: longer than the whole 400 ms promise.
+
+           ponytail: one limit for speeding up and for braking, because that is all this plugin
+           has. At 4.5 and 20 the outer wheel of a full-speed turn is asked for 6.5 m/s^2, and a
+           step command or a stop there can slip (heading off by up to 1.8 deg in four runs).
+           Upgrade: ramp speed increases upstream, in the supervisor or the MCU, and keep this as
+           the brake. -->
+      <max_linear_acceleration>4.5</max_linear_acceleration>
+      <min_linear_acceleration>-4.5</min_linear_acceleration>
+      <max_angular_acceleration>20.0</max_angular_acceleration>
+      <min_angular_acceleration>-20.0</min_angular_acceleration>
       <max_linear_velocity>0.6</max_linear_velocity>
       <min_linear_velocity>-0.6</min_linear_velocity>
       <max_angular_velocity>2.0</max_angular_velocity>

@@ -21,7 +21,19 @@ ros2 launch mio_nav navigation.launch.py   # AMCL on the saved map + Nav2; click
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true   # /cmd_vel is TwistStamped
 ```
 
-Phase 2 is under way: `H2.1` (AMCL and Nav2 goals) and `H2.2` (routing around a box dropped mid-run) run in simulation. `HANDOFF.md` has the details;
+**Hold the key to drive.** `sim.launch.py` also starts `mio_safety_supervisor`, which is the only
+thing the wheels listen to: it has the robot standing still within 400 ms of the last command, so
+a tap is a nudge. It also locks the wheels if the robot tips past 30°, until someone sets it upright
+and runs `ros2 service call /mio_safety_supervisor/clear std_srvs/srv/Trigger`.
+
+**To let the Brain drive it**, start the Brain and add the gateway to the navigation launch:
+
+```bash
+DEV_TOKEN=<the Brain's DEV_TOKEN> BRAIN_URL=ws://127.0.0.1:8080/ws \
+  ros2 launch mio_nav navigation.launch.py gateway:=true
+```
+
+Phase 2 runs in simulation — `H2.1` (AMCL and Nav2 goals), `H2.2` (routing around a box dropped mid-run), `H2.3` (the safety supervisor), `H2.4` (the tip-over lock) — and so does the first of Phase 3, `H3.1` (the gateway). `HANDOFF.md` has the details;
 the project's state is in the vault's `STATUS.md`.
 
 ## Agent tooling

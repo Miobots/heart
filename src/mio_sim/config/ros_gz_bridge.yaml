@@ -7,7 +7,9 @@
 
 # Velocity Commands (ROS 2 -> Gazebo). Stamped, because Nav2 on Lyrical publishes TwistStamped
 # (enable_stamped_cmd_vel defaults to true). Teleop needs `--ros-args -p stamped:=true`.
-- ros_topic_name: "/cmd_vel"
+# The wheels listen to /cmd_vel_safe and nothing else: Nav2 and teleop publish /cmd_vel, and only
+# mio_safety_supervisor turns that into /cmd_vel_safe (H2.3). Never bridge /cmd_vel here.
+- ros_topic_name: "/cmd_vel_safe"
   gz_topic_name: "/model/mio/cmd_vel"
   ros_type_name: "geometry_msgs/msg/TwistStamped"
   gz_type_name: "gz.msgs.Twist"

@@ -1,6 +1,6 @@
 # Handoff — Heart
 
-**Last updated:** 2026-10-12 (the voice section under "Next step"; the rest is as of 2026-09-27)
+**Last updated:** 2026-11-18 (the `H2.3`, `H2.4` and `H3.1` sections under "Next step"; the voice section is as of 2026-10-12; the rest is as of 2026-10-01)
 **Status:** Phase 0.1 and Phase 1 are on `main` — the source build, the URDF, the Gazebo Jetty
 world, the slam_toolbox pipeline and the saved `home_arena` map. The 2026-08-14 note below said
 this work was "committed on `stb/lyrical_source_build`, not pushed"; it merged as PR #1.
@@ -99,6 +99,104 @@ we deliberately did not build.
 ---
 
 ## Next step
+
+**`H2.3` works in simulation, verified headless** on 2026-11-18. `mio_safety_supervisor` (Rust)
+sits between everything that drives and the wheels: Nav2 and teleop publish `/cmd_vel`, the
+supervisor clamps it into `/cmd_vel_safe`, and the Gazebo bridge forwards `/cmd_vel_safe` and
+nothing else. `sim.launch.py` starts it, so nothing about launching changes.
+
+**`H2.4` works in simulation, verified headless** on 2026-11-18, in the same node. It reads tilt
+off `/imu`. Past 30° for 100 ms it stops the wheels, then reports `TIP_OVER` on `/diagnostics`, and
+stays locked — with drive commands still arriving — until `~/clear` is called with the robot
+upright for a second.
+
+**`H3.1` works in simulation, verified headless** on 2026-11-18. `mio_gateway` (Rust) dials the
+Brain and is the only node that does. Start it with the navigation launch:
+
+```bash
+DEV_TOKEN=<the Brain's DEV_TOKEN> BRAIN_URL=ws://127.0.0.1:8080/ws \
+  ros2 launch mio_nav navigation.launch.py gateway:=true
+```
+
+`DEVICE_ID` defaults to `heart-01`. Without `DEV_TOKEN` it refuses to start. Next is `H3.2`, the
+durable outbox.
+
+- **What it does.** `nav.goto` becomes a Nav2 `NavigateToPose` goal, by coordinates or by a name
+  looked up in `mio_nav/maps/home_arena.regions.json`. The ACK says what Nav2 said. Progress goes
+  back once a second, and the result always goes back. `nav.cancel` cancels the goal it names. A
+  retried command gets its first answer and the robot moves once. It sends a heartbeat every 5 s,
+  the capability manifest on connecting, on any change and every 10 s, and the supervisor's faults
+  as `diag.fault`. While a fault stands it refuses goals with `active_fault`.
+- **Measured against the real Brain** (`ce527da`, on a spare port): an app-role client asked the
+  Brain for `(1.0, 0)` and then for `"Living Room"`; the Brain relayed both, the gateway's ACKs came
+  back through it, `/odom` went to x = 0.79 and then to x = −1.42, and the Brain logged 13 valid
+  `nav.feedback` and 2 valid `nav.result`, none invalid. `"attic"` came back refused,
+  `unknown_region`.
+- **Measured against a scripted Brain,** 35 checks, all passing, twice: a goal by coordinates and
+  its retry, a goal by name cancelled on the way, five kinds of refusal, a 20 s outage with a goal
+  in flight (the result arrived after reconnecting, stamped with when it happened), and a tip-over
+  (reported, goals refused, cleared, driving back). Every message the gateway sent was parsed by
+  the TypeScript codec the Brain uses: 36–38 messages a run, none invalid.
+- **Not done.** No durable outbox: a result that happens during an outage waits in memory and is
+  lost if the gateway restarts (`H3.2`). No pose, battery or map goes to the app. `voice.speak` is
+  refused, `local_voice_unavailable`. `ws://` only — no TLS is compiled in. "Go to the kitchen"
+  through the Brain's language model was not run; that is `B2.6`, and it needs a model key.
+- **The named places are a stand-in.** Two points typed into a file, inside the 2 m patch the saved
+  map knows. Real labels come from people, through `region.upsert`. **There is no "bedroom":** in
+  `home_arena.sdf` that room has walls on all four sides and no door.
+- **Nav2 failed to start twice in about two dozen bring-ups tonight.** Both times it stopped at
+  `Activating controller_server`, after the local costmap's `KeepoutFilter: Subscribing` line, and
+  `bt_navigator` then rejected every goal as "inactive" — which the gateway passed on correctly as
+  `navigation_rejected`. Not explained. It happened once with no gateway running, and four
+  bring-ups in a row passed with stale `/dev/shm/fastdds_*` files present, so it is neither of
+  those. If goals are all rejected, check `ros2 lifecycle get /bt_navigator` before anything else.
+- **Tests:** `cd src/mio_gateway && cargo test` needs no ROS and is what CI runs. The node itself
+  is `cargo build --features ros`, which `./build.sh` does.
+
+- **Measured**, three times, with a 20 Hz publisher never stopping: robot dropped on its side →
+  stop published 80–120 ms after the tilt passed 30° (message stamps, so simulation time; the hold
+  is 100 ms of wall time), `TIP_OVER` reported 13–15 ms after the stop. Set
+  upright again: 0 of 210 messages on `/cmd_vel_safe` non-zero, `/odom` moved 0 mm. `~/clear` on
+  its side: refused, "still tipped". `~/clear` upright: "unlocked", and it drove on at 0.30 m/s.
+- **No IMU, no motion.** A silent IMU is a fault of its own (`IMU_NO_DATA`): pausing the
+  simulation stopped the wheels and unpausing freed them, with no one clearing anything. So is an
+  IMU that says it does not know its orientation — covariance `-1`, which is what a bare MPU6050
+  driver sends. **On hardware the supervisor will not move the robot until something publishes a
+  fused orientation** (`H5.2`).
+- **To tip the simulated robot:** `gz service -s /world/home_arena/set_pose --reqtype gz.msgs.Pose
+  --reptype gz.msgs.Boolean --timeout 3000 --req 'name: "mio", position: {x: 0.5, z: 0.3},
+  orientation: {x: 0.5646, w: 0.8253}'`. To clear: `ros2 service call /mio_safety_supervisor/clear
+  std_srvs/srv/Trigger`.
+- **The lock is in memory.** A supervisor that restarts comes back unlocked unless the robot is
+  still tilted. Announcing aloud and reporting to the Brain are `H4.x` and `H3.1`; this only puts
+  the fault where they can hear it.
+
+- **Measured:** a 20 Hz publisher killed with `kill -9` mid-drive, ten runs across ±0.5 and
+  ±0.3 m/s, ±2.0 rad/s, and 0.5 m/s with −1.0 rad/s. The robot was standing still **283–357 ms**
+  after the last command: the stop went out at 222–240 ms and braking took 61–118 ms. Read
+  standstill off the *position* on `/odom`; its speed is a 20 ms average and reads zero a sample late.
+- **400 ms is split, not waited.** The supervisor waits 240 ms of silence (`stop_within_ms` 400
+  less `brake_ms` 160) and the drive brakes in the rest. For that the simulated drive's
+  acceleration limits went from 1.5 m/s² and 3.0 rad/s² to 4.5 and 20, and `max_linear` is
+  0.5 m/s. **Those four numbers are one measurement** — on hardware, measure braking first (`H5.5`),
+  then set `brake_ms`. If braking leaves under 240 ms of silence the supervisor will not start.
+- **The price of braking that hard:** a step command or a stop at full speed *while turning* can
+  slip the wheels. Heading from `/odom` was off by 0.0–1.8° against Gazebo over six runs at
+  0.5 m/s with −1.0 rad/s; straight lines and spins on the spot stayed exact (0 mm, 0.0°), and the
+  old limits never slipped. Nav2 ramps its own commands and is not affected; a keyboard is.
+- **Teleop is hold-to-drive now.** `teleop_twist_keyboard` publishes once per key press, so a tap
+  moves the robot for a quarter of a second. Hold the key. Key-repeat takes 500 ms to start on
+  this desktop, so there is one hitch at the start of every hold.
+- **Do not reverse blind in a test.** Two "odometry errors" of 118 mm and 1 m while measuring this
+  were the robot backing into the living-room table at x = −2.
+- **Tests:** `cd src/mio_safety_supervisor && cargo test`, with ROS sourced. The node itself is
+  built by `./build.sh` (which now needs `cargo`) into `build/`, not into `target/`.
+- **Stop a launch with Ctrl-C, not `kill`.** `ros2 launch` killed with SIGTERM exits and leaves
+  every child running — Gazebo, the bridge and the supervisor (checked: 4 of 4 survived). A
+  supervisor left over from an earlier run is a second publisher on `/cmd_vel_safe`, possibly from
+  an older build. Check `pgrep -fa mio_safety_supervisor` is empty before a run, as for `gz-sim-main`.
+- **Not covered:** two things publishing `/cmd_vel` at once (Nav2 and teleop) simply interleave.
+  Choosing between sources is a later job; the supervisor only clamps and times out.
 
 **`H4.0` — the voice pipeline is built and waiting for a voice.** `src/mio_voice` runs the offline
 chain on a laptop (`src/mio_voice/README.md`). Its tests pass, it answers typed and spoken requests
@@ -210,8 +308,8 @@ not care.
 - **Do not create `~/miobots_ws`.** This repo *is* the workspace.
 - `src/navigation2` and `src/slam_toolbox` are gitignored on purpose — `nav2-lyrical.repos` tracks
   them instead. Do not `git add -f` them.
-- The two Rust crates carry `COLCON_IGNORE` (decision 31). `cargo build` for those; colcon skips
-  them and that is correct until `ros2_rust` is set up.
+- Both Rust packages are built by `./build.sh` through cargo (decisions 47 and 49). Neither carries
+  `COLCON_IGNORE` any more, and `ros2_rust` is not needed.
 - There is a second workspace at `~/ros2_ws` with an older nav2 + slam_toolbox on different
   branches. It is not this build and is not authoritative.
 

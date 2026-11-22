@@ -27,14 +27,31 @@ frame. If you find yourself adding a velocity publisher to it, stop.
 
 **`mio_gateway` is the only node allowed to speak the external protocol.** Everything else stays
 inside the ROS graph. This is what makes "a language-model-adjacent process cannot command the
-wheels" a demonstrable property rather than an argument.
+wheels" a demonstrable property rather than an argument. It reaches the wheels the way everything
+else does — a goal to Nav2, whose velocities go through the supervisor — and it has no velocity
+publisher of its own. Its token comes from the environment (`DEV_TOKEN`), never from a ROS parameter
+and never from a default in the code (HEART_DECISIONS 49).
+
+**The wheels listen to `/cmd_vel_safe`, and only `mio_safety_supervisor` publishes it**
+(HEART_DECISIONS 47). Everything that wants to drive — Nav2, teleop, later the gateway — publishes
+`/cmd_vel`. Never bridge `/cmd_vel` to the motors, and never publish `/cmd_vel_safe` from anywhere
+else: either one removes the veto without anything failing.
+
+**400 ms is a promise about the wheels, not a timer.** The robot is standing still within 400 ms of
+the last command, so the supervisor waits `400 - brake_ms` of silence and braking gets the rest.
+`brake_ms`, `max_linear`, `max_angular` and the drive's own acceleration limits are **measured
+together**: raise a speed limit or weaken the brake and `brake_ms` is wrong until it is measured
+again. The supervisor refuses to start when braking leaves under 240 ms of silence.
 
 **Two safety layers, in a hierarchy, not peers.** The MCU cuts motors in hardware for cliff, bump
 and E-stop, and survives the Pi freezing entirely. The Rust supervisor clamps and vetoes what
 reaches the MCU but **cannot override it**. The MCU is final authority.
 
 **Tip-over ordering never changes:** halt motors → announce aloud locally → report upward. In that
-order, every time.
+order, every time. In code: the supervisor publishes the stop, and only then `TIP_OVER` on
+`/diagnostics` — which is where the voice and the gateway hear of it, so neither can get ahead of
+the halt. The lock is released only by `~/clear`, and only with the robot upright. **No usable IMU
+data means no motion** (HEART_DECISIONS 48).
 
 ---
 
@@ -77,10 +94,16 @@ against pinned commits. Any document saying "Jazzy" is stale.
 | `mio_perception` | Object detection. **Advisory only** | write (Python permitted) |
 | `mio_msgs` | Interface definitions. No logic at all | definitions only |
 
-**The two Rust packages carry `COLCON_IGNORE` on purpose.** They are plain cargo crates for now;
-building them as ROS 2 packages needs `ros2_rust` (colcon-cargo + cargo-ament-build), which is not
-installed and is its own task. Delete the ignore file once that is set up. Until then `cargo build`
-works and colcon skips them, so the workspace still builds.
+**The Rust packages are plain cargo crates, and `./build.sh` builds them** (HEART_DECISIONS 47).
+`mio_safety_supervisor` has a small `CMakeLists.txt` that asks cargo to build and installs the
+binary, so there is no second build step to forget. It needs `cargo` on the PATH and uses `rclrs` +
+`ros-env` from crates.io; `ros2_rust`'s colcon tooling is **not** needed. Its tests are `cargo test`
+in the package directory, with ROS sourced. `mio_gateway` is built the same way, with one
+difference: **its library needs no ROS.** The wire contract (`lib.rs`) and everything the gateway
+decides (`session.rs`) are plain Rust, so `cargo test` there runs anywhere — that is what CI runs,
+against the vectors in `miobots-protocol`. The ROS node is the binary, behind the `ros` feature,
+which `./build.sh` turns on. Keep it that way: logic goes in `session.rs`, and `main.rs` only moves
+messages between the socket, Nav2 and the supervisor.
 
 **`mio_voice` carries `COLCON_IGNORE` too, for a different reason.** `H4.0` is the voice pipeline
 standalone: C++, plain CMake, no ROS, built outside the workspace (`src/mio_voice/README.md`).
@@ -107,9 +130,16 @@ world, manual driving, odometry (1.00 m commanded → 1.0002 m on `/odom`), the 
 saved SLAM map (`mio_nav/maps/home_arena`). Phase 2 has started: `H2.1` — `mio_nav navigation.launch.py`
 runs AMCL on the saved map plus Nav2 (stock `nav2_bringup`, our values in `config/nav2_params.yaml`
 marked `# mio:`), and `/cmd_vel` is `TwistStamped`; `H2.2` — it routes around a box dropped mid-run
-(`mio_sim/models/obstacle_box.sdf`), with no config change needed. **Not started:** everything from
-the safety supervisor on. `mio_gateway`
-and `mio_safety_supervisor` are stubs, and `mio_bringup` has no launch files yet.
+(`mio_sim/models/obstacle_box.sdf`), with no config change needed; `H2.3` — `mio_safety_supervisor`
+clamps `/cmd_vel` into `/cmd_vel_safe` and has the robot standing still within 400 ms of the last
+command (240 ms of silence, then up to 160 ms of braking), and `sim.launch.py` starts it; `H2.4` —
+the same node locks the wheels when the robot tips past 30° and keeps them locked until
+`~/clear`. Phase 3 has started: `H3.1` — `mio_gateway` dials the Brain, turns `nav.goto` into a
+Nav2 goal and sends progress and the result back, reports the supervisor's faults, and says what
+the robot can do (`navigation.launch.py gateway:=true`); it remembers command keys for ten minutes
+and sends a heartbeat every 5 s, which is `H3.4`. **Not started:** the durable outbox (`H3.2` — what
+happens during an outage is held in memory only), telemetry to the app (pose, battery, map), speech,
+and everything after. `mio_bringup` has no launch files yet.
 
 **`H4.0` is built but not finished.** `src/mio_voice` is the offline voice pipeline running
 standalone on a laptop — wake phrase, whisper.cpp, the four stages, a ~1B model as a child process,

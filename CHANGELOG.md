@@ -5,6 +5,112 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-11-18 — H3.1: the gateway dials the Brain and drives the simulated robot
+
+`src/mio_gateway` is no longer a scaffold. It dials the Brain over WebSocket, says hello, and turns
+`nav.goto` into a Nav2 goal — by coordinates, or by a name looked up in
+`mio_nav/maps/home_arena.regions.json` — then sends the ACK Nav2 gave, progress once a second and
+the result. It also sends a heartbeat every 5 s, the robot's half of the capability manifest, and
+the supervisor's faults as `diag.fault`. `navigation.launch.py gateway:=true` starts it.
+
+`src/session.rs` holds every decision and has no socket and no ROS in it; `src/main.rs` moves
+messages between the socket, Nav2 and the supervisor. The library needs no ROS, so CI keeps testing
+it with plain `cargo test`; the node is behind the `ros` feature.
+
+Verified headless against the real Brain on a spare port: an app-role client asked for `(1.0, 0)`
+and for `"Living Room"`, the Brain relayed both, the robot drove to x = 0.79 and then x = −1.42,
+and the Brain logged 13 valid `nav.feedback` and 2 valid `nav.result`. And against a scripted
+Brain, 35 checks: retry, cancel, refusals, a 20 s outage, a tip-over.
+
+**Found:** the Brain does not do what ENVELOPE.md says in several places, and the gateway follows
+the Brain. It cancels on a new `corr_id` and names the goal in the payload. It sends a room's name
+and no coordinates. It never retries a command, never sends `sys.error` or `sys.receipt`, and
+ignores an `ERR` — so an unsupported command is refused with an ACK, which it hears at once. Its
+check on `nav.result` needs a `final_pose`, always. The list is in HEART_DECISIONS 49.
+
+**Found:** Nav2 reports 0 m remaining until it has planned a path. Passed on, the first progress
+message said "arrived" a second after the robot was asked to leave. Not forwarded now.
+
+**Found:** an event held while the link was still connecting used up a `seq`, leaving a gap on the
+wire. The stand-in Brain's check for gaps caught it; a held event is numbered when it is sent.
+
+**Found:** a goal stamped with the gateway's clock would be in Nav2's future in simulation. Goals
+go out unstamped, which Nav2 reads as "now".
+
+**Found:** the simulated house's bedroom has no door.
+
+**Not explained:** Nav2 failed to finish starting twice in about two dozen bring-ups. See HANDOFF.
+
+---
+
+## 2026-11-18 — H2.4: the tip-over lock, and 10 ms more room for the 400 ms stop
+
+`mio_safety_supervisor` now reads tilt off `/imu`. Past 30° for 100 ms it stops the wheels, **then**
+reports `TIP_OVER` on `/diagnostics`, and stays locked until `~/clear` (`std_srvs/Trigger`) is
+called with the robot upright for a second. Halt first, report second: the stop goes out in the
+IMU callback, the report on the watchdog's next tick.
+
+Verified headless in Gazebo, three times, with drive commands arriving the whole time: dropped on
+its side → stop published 80–120 ms after the tilt passed 30°, report 13–15 ms after the stop; set upright
+→ 0 of 210 messages on `/cmd_vel_safe` non-zero and 0 mm on `/odom`; `~/clear` on its side refused,
+upright accepted, and it drove on.
+
+**Decided:** no usable IMU data means no motion. A silent IMU is its own fault (`IMU_NO_DATA`) and
+clears itself when the IMU has been back for 100 ms; so is an orientation marked unknown (REP 145,
+covariance `-1`). A subsystem that stops reporting is failed, not quiet (HEART_SPEC R9).
+
+**Decided:** faults go out as `diagnostic_msgs` on `/diagnostics`, once a second and at once on a
+change — ROS's own mechanism, not a new message. `mio_msgs` stays empty.
+
+**Found:** the 400 ms stop had less room than the first measurement said. "Still" was read off the
+speed on `/odom`, which is a 20 ms average and reads zero one sample late; a later top-speed run
+read 409 ms, 389 by position. `brake_ms` is now 160 and silence 240 ms — the floor — and ten runs
+measured by position stood still at **283–357 ms**.
+
+---
+
+## 2026-11-18 — H2.3: the safety supervisor, and Rust nodes without ros2_rust
+
+`src/mio_safety_supervisor` is no longer a scaffold. It subscribes `/cmd_vel`, clamps it, and is
+the only publisher of `/cmd_vel_safe`; the Gazebo bridge now forwards `/cmd_vel_safe` and nothing
+else. When commands go silent it publishes stop, on a monotonic clock, early enough that the robot
+is **standing still within 400 ms of the last command**: 250 ms of silence, then up to 150 ms of
+braking. `src/lib.rs` holds the decisions and has no ROS in it — that is what `cargo test` covers;
+`src/main.rs` is the glue. `sim.launch.py` starts the node, with `respawn`.
+
+Verified headless in Gazebo: a publisher killed mid-drive, ten runs across ±0.5 and ±0.3 m/s,
+±2.0 rad/s, and 0.5 m/s with −1.0 rad/s — robot standing still **308–382 ms** after the last
+command (stop out at 232–249 ms, braking 74–134 ms). A Nav2 goal driven through the supervisor
+still `SUCCEEDED`, and a supervisor killed with `kill -9` came back publishing stop.
+
+**Found:** `ros2_rust`'s colcon tooling (decision 31) is not needed. Lyrical ships its message
+types as Rust, and `rclrs` 0.8.0 + `ros-env` 0.3.0 build against it with plain cargo. A small
+`CMakeLists.txt` has cargo build the node inside `./build.sh`, so the package lost its
+`COLCON_IGNORE`. `cargo` is now needed to build the workspace.
+
+**Found:** waiting 400 ms and then stopping is not "stopped within 400 ms". The first version did
+that and the robot stood still at 590–613 ms, because the simulated drive (1.5 m/s², 3.0 rad/s²)
+needed 200 ms to brake from 0.30 m/s — and 333 and 667 ms from its limits, more than the whole
+promise. The 400 ms is now split: `stop_within_ms` 400 less `brake_ms` 150 leaves 250 ms of
+silence. The simulated drive brakes at 4.5 m/s² and 20 rad/s², and `max_linear` is 0.5 m/s. The
+supervisor refuses to start if braking leaves under 240 ms — two 100 ms teleop frames, so one lost
+frame is still never a stop.
+
+**Found:** braking that hard has a price. The drive's acceleration limits are also its brake
+limits, so a step command or a stop at full speed *while turning* can slip the wheels: heading
+from `/odom` was off by 0.0–1.8° against Gazebo over four such runs. Straight lines and spins on
+the spot stayed exact, and the old limits never slipped. Nav2 ramps its own commands; a keyboard
+does not. Ramping speed *increases* — in the supervisor or the MCU — would remove it.
+
+**Found:** `teleop_twist_keyboard` publishes once per key press, so with a deadman in the path
+keyboard driving is hold-to-drive, and a tap is a quarter-second nudge.
+
+**Found:** `ros2 launch` killed with SIGTERM exits and leaves every child running (4 of 4 here). A
+supervisor left over from an earlier run is a second publisher on `/cmd_vel_safe`. Stop launches
+with Ctrl-C; that was checked and leaves nothing behind.
+
+---
+
 ## 2026-10-12 — H4.0: the offline voice pipeline, standalone on a laptop (built, not yet measured on a voice)
 
 `src/mio_voice` is no longer a scaffold. It is a C++ program, `mio_voice`, that runs the whole
