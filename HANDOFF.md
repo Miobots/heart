@@ -1,6 +1,6 @@
 # Handoff — Heart
 
-**Last updated:** 2026-11-23 (the `H3.3` and `H3.2` sections under "Next step"; `H2.3`, `H2.4` and `H3.1` as of 2026-11-18; the rest as of 2026-10-01)
+**Last updated:** 2026-11-23 (the `H4.0`, `H3.3` and `H3.2` sections under "Next step"; `H2.3`, `H2.4` and `H3.1` as of 2026-11-18; the rest as of 2026-10-01)
 **Status:** Phase 0.1 and Phase 1 are on `main` — the source build, the URDF, the Gazebo Jetty
 world, the slam_toolbox pipeline and the saved `home_arena` map. The 2026-08-14 note below said
 this work was "committed on `stb/lyrical_source_build`, not pushed"; it merged as PR #1.
@@ -245,6 +245,44 @@ DEV_TOKEN=<the Brain's DEV_TOKEN> BRAIN_URL=ws://127.0.0.1:8080/ws \
   an older build. Check `pgrep -fa mio_safety_supervisor` is empty before a run, as for `gz-sim-main`.
 - **Not covered:** two things publishing `/cmd_vel` at once (Nav2 and teleop) simply interleave.
   Choosing between sources is a later job; the supervisor only clamps and times out.
+
+**`H4.0` — the voice pipeline has heard one person, and now wakes for them.** `src/mio_voice` runs
+the offline chain on a laptop (`src/mio_voice/README.md`). One speaker recorded all 163 clips; it
+was tuned on the `dev` half on 2026-11-23 and the `test` half was run once afterwards:
+
+| On the 82 held-out clips | Before | After |
+|---|---|---|
+| Woke | 18 | 78 |
+| Woke and answered correctly | 15 | 53 |
+| Listed requests answered correctly, ignoring wake | 33 of 45 | 32 of 45 |
+| Unlisted requests wrongly accepted | 0 of 37 | 0 of 37 |
+| A listed command, end of speech to reply | 14.5 s | 4.0 s |
+
+"After" is scored the way `listen` hears a recording — cut to where the speech starts — which
+"before" was not. What changed is in `CHANGELOG.md`; the evidence, and what was tried and thrown
+away, is in the vault's `VOICE_EVAL.md` section 3b. The recordings are gitignored and exist on one
+machine only, in the worktree they were recorded in.
+
+**If you change anything about how audio reaches the detectors, run `scripts/replay.sh`.** `eval`
+agreed with itself for a day while `listen` would have woken on 6 clips in 81: the keyword spotter
+hears nothing unless the stretch it is given starts with a little of the room (`kLeadIn`).
+
+Still to do, in order of how much it matters:
+
+1. **`mio_voice eval --background <3 hours of household audio>`.** Both wake detectors were
+   loosened to get from 18 to 76. How often that wakes it when nobody called is the number
+   HEART_DECISIONS 27 asks for, and it is not known.
+2. **A second speaker**, `scripts/record.sh <name>`, about 20 minutes. Every setting was fitted to
+   one voice.
+3. **Check the first speaker's transcripts** against what was actually said — the word-error
+   rates are provisional until then — and add the `dev` wordings the recogniser really produces
+   to `config/phrases.tsv`. A third of listed requests are still answered wrongly, and that, not
+   waking, is now what limits a demonstration.
+4. Play the 20 prepared replies to someone, and run `mio_voice listen` with a real microphone and
+   speaker and the network off. So far `listen` has only been fed recordings.
+5. Write the numbers into the vault's `VOICE_EVAL.md`, tick `H4.0`, take the PR out of draft.
+
+The same recordings can be run through cloud providers for `X1`, which is still open.
 
 **`H2.1` works in simulation, verified headless** on 2026-10-01: `navigation.launch.py`, then two
 `NavigateToPose` goals — the same action RViz's "Nav2 Goal" sends — both `SUCCEEDED` and the robot

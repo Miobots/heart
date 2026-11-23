@@ -1,0 +1,178 @@
+# The utterances the offline voice pipeline is measured on (H4.0), with what each should do.
+#
+# id | split | bucket | lang | stage | intent | slot | text        (tab-separated)
+#
+# Every clip is spoken as "Hey Mio, <text>" — scripts/record.sh shows it that way — so the same
+# recordings measure the wake phrase too. `text` is the reference a transcript is scored against.
+#
+#   split   dev: used to tune the phrase table, thresholds and prompts. test: reported, never tuned on.
+#   bucket  closed    one of the fixed questions or commands
+#           found     answerable from local records; slot is "<row label>:<where|when>"
+#           declined  mentions something on record, but nothing a record can answer
+#           norecord  asks after something never seen — the model must not even start
+#           brain     needs the Brain (smart home, calls, the internet)
+#           chatter   anything else, including near-misses that contain a command word
+#   lang    en, ur (household Urdu, loanwords in Urdu script), mixed (heavier English inside Urdu)
+d-bat-en1	dev	closed	en	deterministic	battery	-	what is your battery level
+d-bat-en2	test	closed	en	deterministic	battery	-	how much battery do you have left
+d-bat-ur1	dev	closed	ur	deterministic	battery	-	بیٹری کتنی ہے
+d-bat-ur2	test	closed	ur	deterministic	battery	-	تمہاری بیٹری کتنی بچی ہے
+d-bat-mx1	dev	closed	mixed	deterministic	battery	-	بیٹری لیول کیا ہے
+d-tim-en1	test	closed	en	deterministic	time	-	what time is it
+d-tim-en2	dev	closed	en	deterministic	time	-	can you tell me the time
+d-tim-ur1	test	closed	ur	deterministic	time	-	کیا وقت ہوا ہے
+d-tim-ur2	dev	closed	ur	deterministic	time	-	ابھی کتنے بجے ہیں
+d-tim-mx1	test	closed	mixed	deterministic	time	-	ٹائم کیا ہو رہا ہے
+d-rem-en1	dev	closed	en	deterministic	next_reminder	-	what is my next reminder
+d-rem-en2	test	closed	en	deterministic	next_reminder	-	do i have any reminders today
+d-rem-ur1	dev	closed	ur	deterministic	next_reminder	-	میرا اگلا ریمائنڈر کیا ہے
+d-rem-ur2	test	closed	ur	deterministic	next_reminder	-	کوئی ریمائنڈر ہے کیا
+d-rem-mx1	dev	closed	mixed	deterministic	next_reminder	-	نیکسٹ ریمائنڈر کب ہے
+d-rom-en1	test	closed	en	deterministic	room	-	which room are you in
+d-rom-en2	dev	closed	en	deterministic	room	-	where are you right now
+d-rom-ur1	test	closed	ur	deterministic	room	-	تم کس کمرے میں ہو
+d-rom-ur2	dev	closed	ur	deterministic	room	-	تم ابھی کہاں ہو
+d-rom-mx1	test	closed	mixed	deterministic	room	-	تم کس روم میں ہو
+d-cap-en1	dev	closed	en	deterministic	capabilities	-	what can you do right now
+d-cap-en2	test	closed	en	deterministic	capabilities	-	what are you able to do
+d-cap-ur1	dev	closed	ur	deterministic	capabilities	-	تم ابھی کیا کر سکتے ہو
+d-cap-ur2	test	closed	ur	deterministic	capabilities	-	آپ کیا کیا کر سکتے ہیں
+d-cap-mx1	dev	closed	mixed	deterministic	capabilities	-	آف لائن تم کیا کر سکتے ہو
+g-stp-en1	test	closed	en	grammar	stop	-	stop
+g-stp-en2	dev	closed	en	grammar	stop	-	stop right there
+g-stp-ur1	test	closed	ur	grammar	stop	-	رک جاؤ
+g-stp-ur2	dev	closed	ur	grammar	stop	-	بس رکو
+g-stp-mx1	test	closed	mixed	grammar	stop	-	اسٹاپ کرو
+g-can-en1	dev	closed	en	grammar	cancel	-	cancel that
+g-can-en2	test	closed	en	grammar	cancel	-	never mind
+g-can-ur1	dev	closed	ur	grammar	cancel	-	کینسل کر دو
+g-can-ur2	test	closed	ur	grammar	cancel	-	رہنے دو
+g-dok-en1	dev	closed	en	grammar	dock	-	go to your dock
+g-dok-en2	test	closed	en	grammar	dock	-	go and charge yourself
+g-dok-ur1	dev	closed	ur	grammar	dock	-	چارج ہونے جاؤ
+g-dok-ur2	test	closed	ur	grammar	dock	-	چارجر پر چلے جاؤ
+g-dok-mx1	dev	closed	mixed	grammar	dock	-	ڈاک پر واپس جاؤ
+g-mut-en1	test	closed	en	grammar	mute	-	be quiet
+g-mut-en2	dev	closed	en	grammar	mute	-	mute yourself
+g-mut-ur1	test	closed	ur	grammar	mute	-	خاموش ہو جاؤ
+g-mut-ur2	dev	closed	ur	grammar	mute	-	چپ ہو جاؤ
+g-unm-en1	test	closed	en	grammar	unmute	-	unmute
+g-unm-en2	dev	closed	en	grammar	unmute	-	you can talk now
+g-unm-ur1	test	closed	ur	grammar	unmute	-	اب بول سکتے ہو
+g-unm-ur2	dev	closed	ur	grammar	unmute	-	ان میوٹ ہو جاؤ
+g-pst-en1	test	closed	en	grammar	patrol_start	-	start patrol
+g-pst-en2	dev	closed	en	grammar	patrol_start	-	start patrolling the house
+g-pst-ur1	test	closed	ur	grammar	patrol_start	-	گشت شروع کرو
+g-pst-ur2	dev	closed	ur	grammar	patrol_start	-	پیٹرول شروع کرو
+g-pps-en1	test	closed	en	grammar	patrol_pause	-	pause the patrol
+g-pps-en2	dev	closed	en	grammar	patrol_pause	-	stop patrolling
+g-pps-ur1	test	closed	ur	grammar	patrol_pause	-	گشت روک دو
+g-pps-ur2	dev	closed	ur	grammar	patrol_pause	-	پیٹرول روک دو
+g-prs-en1	test	closed	en	grammar	patrol_resume	-	resume patrol
+g-prs-en2	dev	closed	en	grammar	patrol_resume	-	continue the patrol
+g-prs-ur1	test	closed	ur	grammar	patrol_resume	-	گشت دوبارہ شروع کرو
+g-prs-ur2	dev	closed	ur	grammar	patrol_resume	-	پیٹرول جاری رکھو
+g-kit-en1	test	closed	en	grammar	goto	kitchen	go to the kitchen
+g-kit-en2	dev	closed	en	grammar	goto	kitchen	come to the kitchen
+g-kit-ur1	test	closed	ur	grammar	goto	kitchen	کچن میں جاؤ
+g-kit-ur2	dev	closed	ur	grammar	goto	kitchen	کچن میں آؤ
+g-kit-mx1	test	closed	mixed	grammar	goto	kitchen	کچن جاؤ
+g-liv-en1	dev	closed	en	grammar	goto	living_room	go to the living room
+g-liv-en2	test	closed	en	grammar	goto	living_room	go to the lounge
+g-liv-ur1	dev	closed	ur	grammar	goto	living_room	لاؤنج میں جاؤ
+g-liv-ur2	test	closed	ur	grammar	goto	living_room	لونگ روم میں جاؤ
+g-bed-en1	dev	closed	en	grammar	goto	bedroom	go to the bedroom
+g-bed-en2	test	closed	en	grammar	goto	bedroom	come to the bedroom
+g-bed-ur1	dev	closed	ur	grammar	goto	bedroom	بیڈ روم میں جاؤ
+g-bed-ur2	test	closed	ur	grammar	goto	bedroom	سونے کے کمرے میں جاؤ
+g-bed-mx1	dev	closed	mixed	grammar	goto	bedroom	بیڈ روم میں چلے جاؤ
+g-rep-en1	test	closed	en	grammar	repeat	-	say that again
+g-rep-en2	dev	closed	en	grammar	repeat	-	repeat that
+g-rep-ur1	test	closed	ur	grammar	repeat	-	دوبارہ بولو
+g-rep-ur2	dev	closed	ur	grammar	repeat	-	پھر سے کہو
+g-lou-en1	test	closed	en	grammar	louder	-	speak louder
+g-lou-en2	dev	closed	en	grammar	louder	-	volume up
+g-lou-ur1	test	closed	ur	grammar	louder	-	اونچا بولو
+g-lou-ur2	dev	closed	ur	grammar	louder	-	آواز اونچی کرو
+g-lou-mx1	test	closed	mixed	grammar	louder	-	والیوم بڑھاؤ
+g-qui-en1	dev	closed	en	grammar	quieter	-	speak softly
+g-qui-en2	test	closed	en	grammar	quieter	-	lower your voice
+g-qui-ur1	dev	closed	ur	grammar	quieter	-	آہستہ بولو
+g-qui-ur2	test	closed	ur	grammar	quieter	-	آواز کم کرو
+g-qui-mx1	dev	closed	mixed	grammar	quieter	-	والیوم کم کرو
+g-slp-en1	test	closed	en	grammar	sleep	-	go to sleep
+g-slp-en2	dev	closed	en	grammar	sleep	-	good night
+g-slp-ur1	test	closed	ur	grammar	sleep	-	سو جاؤ
+g-slp-ur2	dev	closed	ur	grammar	sleep	-	شب بخیر
+f-en-01	test	found	en	grounded-model	found	glasses:where	where are my glasses
+f-en-02	dev	found	en	grounded-model	found	ac_remote:where	where is the AC remote
+f-en-03	test	found	en	grounded-model	found	keys:where	have you seen my keys
+f-en-04	dev	found	en	grounded-model	found	phone_charger:when	when did you last see my phone charger
+f-en-05	test	found	en	grounded-model	found	tv_remote:where	where did i leave the TV remote
+f-en-06	dev	found	en	grounded-model	found	wallet:when	how long ago did you see my wallet
+f-en-07	test	found	en	grounded-model	found	phone:where	where is my phone
+f-en-08	dev	found	en	grounded-model	found	medicine:where	did you see my medicine anywhere
+f-en-09	test	found	en	grounded-model	found	phone_charger:where	where is the charger for my phone
+f-en-10	dev	found	en	grounded-model	found	water_bottle:when	when did you see the water bottle
+f-ur-01	test	found	ur	grounded-model	found	glasses:where	میرا چشمہ کہاں ہے
+f-ur-02	dev	found	ur	grounded-model	found	ac_remote:where	اے سی کا ریموٹ کہاں ہے
+f-ur-03	test	found	ur	grounded-model	found	keys:where	میری چابیاں کہاں ہیں
+f-ur-04	dev	found	ur	grounded-model	found	phone_charger:when	فون کا چارجر کب دیکھا تھا
+f-ur-05	test	found	ur	grounded-model	found	tv_remote:where	ٹی وی کا ریموٹ کدھر ہے
+f-ur-06	dev	found	ur	grounded-model	found	wallet:where	میرا بٹوہ کہاں رکھا ہے
+f-ur-07	test	found	ur	grounded-model	found	medicine:when	تم نے میری دوا کب دیکھی تھی
+f-ur-08	dev	found	ur	grounded-model	found	water_bottle:where	پانی کی بوتل کہاں ہے
+f-ur-09	test	found	ur	grounded-model	found	phone:where	میرا فون کہاں ہے
+f-ur-10	dev	found	ur	grounded-model	found	school_bag:where	اسکول بیگ کہاں پڑا ہے
+f-mx-01	test	found	mixed	grounded-model	found	phone_charger:where	میرا فون چارجر کہاں ہے
+f-mx-02	dev	found	mixed	grounded-model	found	tv_remote:where	ریموٹ کہاں ہے ٹی وی والا
+f-mx-03	test	found	mixed	grounded-model	found	ac_remote:when	اے سی والا ریموٹ کب دیکھا تھا
+f-mx-04	dev	found	mixed	grounded-model	found	glasses:where	میرے گلاسز کہاں ہیں
+n-en-01	test	declined	en	refusal	refusal	-	clean my glasses please
+n-en-02	dev	declined	en	refusal	refusal	-	bring me my phone
+n-en-03	test	declined	en	refusal	refusal	-	what colour is my wallet
+n-en-04	dev	declined	en	refusal	needs_brain	-	call my phone
+n-en-05	test	declined	en	refusal	no_record	-	where is my gym bag
+n-ur-01	dev	declined	ur	refusal	refusal	-	میرا چشمہ صاف کر دو
+n-ur-02	test	declined	ur	refusal	refusal	-	میرا فون لے آؤ
+n-ur-03	dev	declined	ur	refusal	refusal	-	میری دوا کا نام کیا ہے
+n-ur-04	test	declined	ur	refusal	refusal	-	ریموٹ سے ٹی وی چلا دو
+x-en-01	dev	norecord	en	refusal	no_record	-	where is my passport
+x-en-02	test	norecord	en	refusal	no_record	-	have you seen my umbrella
+x-en-03	dev	norecord	en	refusal	no_record	-	where did i put my headphones
+x-en-04	test	norecord	en	refusal	no_record	-	when did you last see my watch
+x-en-05	dev	norecord	en	refusal	no_record	-	where is the newspaper
+x-en-06	test	norecord	en	refusal	no_record	-	find my shoes
+x-ur-01	dev	norecord	ur	refusal	no_record	-	میرا پاسپورٹ کہاں ہے
+x-ur-02	test	norecord	ur	refusal	no_record	-	میری چھتری کہاں ہے
+x-ur-03	dev	norecord	ur	refusal	no_record	-	تم نے میری گھڑی دیکھی ہے
+x-ur-04	test	norecord	ur	refusal	no_record	-	میرے جوتے کدھر ہیں
+x-ur-05	dev	norecord	ur	refusal	no_record	-	اخبار کہاں ہے
+x-ur-06	test	norecord	ur	refusal	no_record	-	میری ٹوپی کب دیکھی تھی
+n-ur-05	test	declined	ur	refusal	no_record	-	میرا ہیڈ فون کب دیکھا تھا
+b-en-01	dev	brain	en	refusal	needs_brain	-	turn on the lights
+b-en-02	test	brain	en	refusal	needs_brain	-	call my mother
+b-en-03	dev	brain	en	refusal	needs_brain	-	what is the weather today
+b-en-04	test	brain	en	refusal	needs_brain	-	play some music
+b-en-05	dev	brain	en	refusal	needs_brain	-	send a message to Ali
+b-ur-01	test	brain	ur	refusal	needs_brain	-	لائٹ بند کر دو
+b-ur-02	dev	brain	ur	refusal	needs_brain	-	پنکھا چلا دو
+b-ur-03	test	brain	ur	refusal	needs_brain	-	امی کو کال کرو
+b-ur-04	dev	brain	ur	refusal	needs_brain	-	آج موسم کیسا ہے
+b-ur-05	test	brain	ur	refusal	needs_brain	-	کوئی گانا لگاؤ
+b-mx-01	dev	brain	mixed	refusal	needs_brain	-	لائٹس آن کر دو
+b-mx-02	test	brain	mixed	refusal	needs_brain	-	میوزک پلے کرو
+c-en-01	dev	chatter	en	refusal	refusal	-	tell me a joke
+c-en-02	test	chatter	en	refusal	refusal	-	what is the capital of France
+c-en-03	dev	chatter	en	refusal	refusal	-	i think we should stop buying so much sugar
+c-en-04	test	chatter	en	refusal	refusal	-	the kitchen was painted last year
+c-en-05	dev	chatter	en	refusal	refusal	-	how are you today
+c-en-06	test	chatter	en	refusal	refusal	-	what is two plus two
+c-en-07	dev	chatter	en	refusal	refusal	-	who won the match yesterday
+c-ur-01	test	chatter	ur	refusal	refusal	-	مجھے ایک کہانی سناؤ
+c-ur-02	dev	chatter	ur	refusal	refusal	-	پاکستان کا دارالحکومت کیا ہے
+c-ur-03	test	chatter	ur	refusal	refusal	-	آج کھانے میں کیا بنا ہے
+c-ur-04	dev	chatter	ur	refusal	refusal	-	کل ہم بازار گئے تھے
+c-ur-05	test	chatter	ur	refusal	refusal	-	تمہارا نام کیا ہے
+c-ur-06	dev	chatter	ur	refusal	refusal	-	مجھے نیند آ رہی ہے
+c-ur-07	test	chatter	ur	refusal	refusal	-	کچن بہت گندا ہے

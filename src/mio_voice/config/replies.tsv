@@ -1,0 +1,105 @@
+# Everything the offline voice pipeline can say, in both languages.
+#
+# key | lang | template        (tab-separated; {placeholders} are filled in by core.cpp)
+#
+# A reply is always a filled template: the language model picks a row and never writes a sentence.
+# Urdu avoids forms that would have to agree with the gender of a {label} (hence "{label} کو").
+# English words inside Urdu replies are spelled in Urdu script so the Urdu voice can read them.
+battery	en	My battery is at {pct} percent.
+battery	ur	میری بیٹری {pct} فیصد ہے۔
+battery_charging	en	My battery is at {pct} percent, and I am charging.
+battery_charging	ur	میری بیٹری {pct} فیصد ہے، اور میں چارج ہو رہا ہوں۔
+time	en	It is {hour}:{minute} {ampm}.
+time	ur	ابھی {period} کے {hour} بج کر {min} منٹ ہوئے ہیں۔
+next_reminder	en	Your next reminder is: {text}, at {hour}:{minute} {ampm}.
+next_reminder	ur	آپ کا اگلا ریمائنڈر ہے: {text}، {period} {hour} بج کر {min} منٹ پر۔
+no_reminder	en	You have no reminders coming up.
+no_reminder	ur	آپ کا کوئی ریمائنڈر باقی نہیں ہے۔
+room	en	I am in the {room}.
+room	ur	میں {room} میں ہوں۔
+room_unknown	en	I am not sure which room I am in.
+room_unknown	ur	مجھے نہیں معلوم کہ میں کس کمرے میں ہوں۔
+capabilities	en	Right now these work: {can}. These do not: {cannot}.
+capabilities	ur	ابھی یہ کام کر رہے ہیں: {can}۔ یہ کام نہیں کر رہے: {cannot}۔
+capabilities_all	en	Right now everything works: {can}.
+capabilities_all	ur	ابھی سب کچھ کام کر رہا ہے: {can}۔
+cmd.stop	en	Stopping.
+cmd.stop	ur	رک رہا ہوں۔
+cmd.cancel	en	Okay, cancelled.
+cmd.cancel	ur	ٹھیک ہے، کینسل کر دیا۔
+cmd.dock	en	Going to my dock.
+cmd.dock	ur	چارج ہونے جا رہا ہوں۔
+cmd.mute	en	Okay, I will stay quiet.
+cmd.mute	ur	ٹھیک ہے، میں خاموش رہوں گا۔
+cmd.unmute	en	I can talk again.
+cmd.unmute	ur	میں دوبارہ بول سکتا ہوں۔
+cmd.patrol_start	en	Starting the patrol.
+cmd.patrol_start	ur	گشت شروع کر رہا ہوں۔
+cmd.patrol_pause	en	Patrol paused.
+cmd.patrol_pause	ur	گشت روک دیا ہے۔
+cmd.patrol_resume	en	Resuming the patrol.
+cmd.patrol_resume	ur	گشت دوبارہ شروع کر رہا ہوں۔
+cmd.goto	en	Going to the {room}.
+cmd.goto	ur	{room} میں جا رہا ہوں۔
+cmd.repeat_none	en	I have not said anything yet.
+cmd.repeat_none	ur	میں نے ابھی تک کچھ نہیں کہا۔
+cmd.louder	en	Okay, speaking louder.
+cmd.louder	ur	ٹھیک ہے، اونچا بولوں گا۔
+cmd.quieter	en	Okay, speaking more softly.
+cmd.quieter	ur	ٹھیک ہے، آہستہ بولوں گا۔
+cmd.sleep	en	Good night.
+cmd.sleep	ur	شب بخیر۔
+found_where	en	I last saw the {label} in the {room}, {ago}.
+found_where	ur	میں نے {label} کو آخری بار {room} میں دیکھا تھا، {ago}۔
+found_when	en	I last saw the {label} {ago}, in the {room}.
+found_when	ur	میں نے {label} کو {ago} دیکھا تھا، {room} میں۔
+no_record	en	I have no record of that. I can still tell you where I last saw things I have noticed, the time, and my battery.
+no_record	ur	میرے پاس اس کا کوئی ریکارڈ نہیں ہے۔ جو چیزیں میں نے دیکھی ہیں ان کا بتا سکتا ہوں، اور وقت اور اپنی بیٹری بھی۔
+needs_brain	en	I cannot do that while I am offline. I can still move, go to my dock, tell you the time, and find things I have seen.
+needs_brain	ur	آف لائن ہوتے ہوئے میں یہ نہیں کر سکتا۔ میں ابھی بھی چل سکتا ہوں، چارج ہونے جا سکتا ہوں، وقت بتا سکتا ہوں، اور دیکھی ہوئی چیزیں ڈھونڈ سکتا ہوں۔
+refusal	en	I cannot help with that while I am offline. I can tell you my battery, the time, your next reminder, which room I am in, and where I last saw something.
+refusal	ur	آف لائن ہوتے ہوئے میں اس میں مدد نہیں کر سکتا۔ میں اپنی بیٹری، وقت، آپ کا اگلا ریمائنڈر، اپنا کمرہ، اور یہ بتا سکتا ہوں کہ کوئی چیز آخری بار کہاں دیکھی تھی۔
+not_understood	en	Sorry, I did not catch that. Please say it again.
+not_understood	ur	معاف کیجیے، میں سمجھ نہیں سکا۔ دوبارہ کہیے۔
+clock.am	en	AM
+clock.pm	en	PM
+clock.morning	en	in the morning
+clock.afternoon	en	in the afternoon
+clock.evening	en	in the evening
+clock.night	en	at night
+clock.morning	ur	صبح
+clock.afternoon	ur	دوپہر
+clock.evening	ur	شام
+clock.night	ur	رات
+ago.minute	en	{n} minute ago
+ago.minutes	en	{n} minutes ago
+ago.hour	en	{n} hour ago
+ago.hours	en	{n} hours ago
+ago.day	en	{n} day ago
+ago.days	en	{n} days ago
+ago.minute	ur	{n} منٹ پہلے
+ago.minutes	ur	{n} منٹ پہلے
+ago.hour	ur	{n} گھنٹہ پہلے
+ago.hours	ur	{n} گھنٹے پہلے
+ago.day	ur	{n} دن پہلے
+ago.days	ur	{n} دن پہلے
+list.and	en	and
+list.and	ur	اور
+list.comma	en	,
+list.comma	ur	،
+room.kitchen	en	kitchen
+room.kitchen	ur	کچن
+room.living_room	en	living room
+room.living_room	ur	لاؤنج
+room.bedroom	en	bedroom
+room.bedroom	ur	بیڈ روم
+cap.driving	en	driving
+cap.driving	ur	چلنا
+cap.docking	en	docking
+cap.docking	ur	چارجر پر جانا
+cap.recording	en	recording
+cap.recording	ur	ریکارڈنگ
+cap.local-voice	en	offline voice
+cap.local-voice	ur	آف لائن آواز
+cap.robot-health	en	health checks
+cap.robot-health	ur	اپنی جانچ

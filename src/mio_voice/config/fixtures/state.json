@@ -1,0 +1,11 @@
+{
+  "battery": { "percentage": 76, "voltage": 12.1, "is_charging": false },
+  "room": "kitchen",
+  "capabilities": {
+    "driving": { "state": "available" },
+    "docking": { "state": "available" },
+    "recording": { "state": "unavailable", "reason": "camera not connected" },
+    "local-voice": { "state": "degraded", "note": "offline — simple phrasing only" },
+    "robot-health": { "state": "available" }
+  }
+}

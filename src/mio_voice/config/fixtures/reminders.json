@@ -1,0 +1,6 @@
+[
+  { "occurrence_id": "oc-11", "reminder_id": "r-3", "due_in_min": 35,
+    "text": { "en": "take your medicine", "ur": "دوا لینی ہے" } },
+  { "occurrence_id": "oc-12", "reminder_id": "r-4", "due_in_min": 240,
+    "text": { "en": "call the plumber", "ur": "پلمبر کو فون کرنا ہے" } }
+]

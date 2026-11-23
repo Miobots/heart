@@ -16,6 +16,7 @@
 6. **Wheels Listen To `/cmd_vel_safe` Only:** Nav2, teleop and (later) the gateway publish `/cmd_vel`; only `mio_safety_supervisor` publishes `/cmd_vel_safe` — clamped, and stopped when commands go silent. Never bridge `/cmd_vel` to the motors or publish `/cmd_vel_safe` from anywhere else (HEART_DECISIONS 47).
 7. **400 ms Is A Promise About The Wheels, Not A Timer:** Standing still within 400 ms of the last command, so the supervisor waits `400 - brake_ms` of silence and braking gets the rest. `brake_ms`, `max_linear`, `max_angular` and the drive's acceleration limits are measured together — change one and `brake_ms` must be measured again. The supervisor refuses to start when braking leaves under 240 ms of silence (HEART_DECISIONS 47).
 8. **Rust Packages Build With `./build.sh`:** `mio_safety_supervisor` is a plain cargo crate that a small `CMakeLists.txt` builds and installs; it needs `cargo` on the PATH. `ros2_rust`'s colcon tooling is not needed (HEART_DECISIONS 47). `mio_gateway` is built the same way, and its library needs no ROS: the wire contract (`lib.rs`) and everything the gateway decides (`session.rs`) are plain Rust that CI tests against the shared vectors; the ROS node is the binary behind the `ros` feature. Logic goes in `session.rs`, never in `main.rs`. The gateway has no velocity publisher, and its token comes from the environment (`DEV_TOKEN`), never a ROS parameter or a default in code (HEART_DECISIONS 49).
+9. **Grounded Local Voice (`mio_voice`):** If local search finds nothing, the local model is never started. It only picks a retrieved row; a template speaks. No audio leaves the device.
 
 ---
 
@@ -62,4 +63,21 @@ cd src/mio_gateway && cargo test
 
 # Run on hardware — not written yet; mio_bringup has no launch files until Phase 5
 # ros2 launch mio_bringup real.launch.py
+
+# Voice pipeline standalone (H4.0) — plain CMake, NOT colcon (src/mio_voice has COLCON_IGNORE)
+src/mio_voice/scripts/fetch_deps.sh
+cmake -S src/mio_voice -B ~/.cache/mio_voice/build && cmake --build ~/.cache/mio_voice/build -j4
+ctest --test-dir ~/.cache/mio_voice/build
+~/.cache/mio_voice/build/mio_voice listen
 ```
+
+`H4.0` is built and measured on **one** person's recordings: tuned on half, it wakes on 78 of 82
+clips of the other half and answers 53 correctly, a listed command in about 4 s. **Not done:** the
+false-wake rate is unmeasured, there is no second speaker, nobody has spoken to it through a live
+microphone, and a third of listed requests are still heard wrongly (the vault's `VOICE_EVAL.md`).
+**Two things a change to `mio_voice` must keep (HEART_DECISIONS 51):** a stretch of speech is handed
+on with the 0.4 s the microphone heard before it (`kLeadIn`) — without it the keyword spotter fired
+on 6 recordings in 81 instead of 65, and zeros in front do not do — and `eval` scores a recording
+cut the way `listen` hears it, not the whole file. Run `src/mio_voice/scripts/replay.sh` after
+touching how audio reaches the detectors: `eval` alone agreed with itself while `listen` was deaf. The build-order chain's "voice" means voice on the robot
+(`H4.1`–`H4.4`); `H4.0` is a laptop program outside it (HEART_DECISIONS 42).

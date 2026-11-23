@@ -112,6 +112,13 @@ against the vectors in `miobots-protocol`. The ROS node is the binary, behind th
 which `./build.sh` turns on. Keep it that way: logic goes in `session.rs`, and `main.rs` only moves
 messages between the socket, Nav2 and the supervisor.
 
+**`mio_voice` carries `COLCON_IGNORE` too, for a different reason.** `H4.0` is the voice pipeline
+standalone: C++, plain CMake, no ROS, built outside the workspace (`src/mio_voice/README.md`).
+Without the ignore file `./build.sh` would configure it as a ROS package and compile whisper.cpp
+into the workspace build. Delete the file when `H4.1` wraps the pipeline as a node. The Python guard
+covers everything under `src/mio_voice`, launch files included — `H4.1` needs an XML launch file,
+or one in `mio_bringup`.
+
 **The architectural bet: sim and real are the same code.** Only the launch file and the driver
 packages differ — Gazebo plugins publish `/scan`, `/imu`, `/odom` in simulation; real drivers
 publish the same topics on hardware. Same topic names, same message types. If you find yourself
@@ -143,9 +150,27 @@ survives the gateway being killed; `H3.3` — `src/mio_gateway/scripts/outbox_pr
 Gazebo across a Brain outage with a goal in flight. **Not started:** telemetry to the app (pose,
 battery, map), speech, and everything after. `mio_bringup` has no launch files yet.
 
+**`H4.0` is built but not finished.** `src/mio_voice` is the offline voice pipeline running
+standalone on a laptop — wake phrase, whisper.cpp, the four stages, a ~1B model as a child process,
+Piper voices — with its tests passing and the whole chain running with the network removed. One
+person has recorded the corpus and it has been tuned on half of it: on the other half it wakes on
+78 of 82 clips and answers 53 of them correctly, a listed command in about 4 s. **Not done:** how
+often it wakes when nobody called it is unmeasured, there is no second speaker, nobody has spoken
+to it through a live microphone, and a third of listed requests are still heard wrongly. See the
+vault's `VOICE_EVAL.md`.
+
+**Two things a change to `mio_voice` must keep (HEART_DECISIONS 51).** A stretch of speech is handed
+on with the 0.4 s the microphone heard before it (`kLeadIn`): without it the keyword spotter fired
+on 6 recordings in 81 instead of 65, and zeros in front do not do. And `eval` scores a recording
+cut the way `listen` hears it, not the whole file. `src/mio_voice/scripts/replay.sh` plays
+recordings into `listen` at microphone speed — run it after touching how audio reaches the
+detectors, because `eval` alone agreed with itself while `listen` was deaf.
+
 The order, strictly: URDF → Gazebo spawn → manual driving → odometry → LiDAR → SLAM mapping →
 AMCL → Nav2 goals → obstacle avoidance → safety supervisor → exploration → gateway → outbox →
-voice → hardware. **Never parallelize two of these.**
+voice → hardware. **Never parallelize two of these.** "Voice" there is voice *on the robot*
+(`H4.1`–`H4.4`). `H4.0` sits outside the chain: a laptop program that touches nothing in the ROS
+graph (HEART_DECISIONS 42).
 
 ---
 

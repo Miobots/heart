@@ -5,6 +5,53 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-11-23 — H4.0: it wakes for a person now, and answers in seconds
+
+One speaker recorded the 163-clip corpus. The first pass over it found that `mio_voice` woke on 18
+of the 82 held-out clips and took about 14 s to answer. Tuned on the other half only, it now wakes
+on 78 and answers a listed command in 4 s; 53 of the 82 get the right answer, where 15 did.
+
+**Found:** the wake check had no limit on how much it wrote. It is meant to read the first two or
+three words; instead the decoder ran on, repeating itself to fill its window, and a check costed at
+a third of a second took several. Capped at eight tokens.
+
+**Found:** the keyword spotter's threshold, 0.15, was right for the synthetic voice and useless for
+a person: 1 clip in 81. At 0.0003 with a higher boost and nine more spellings it fires on 65.
+
+**Found, late, by replaying recordings into `listen`:** `eval` was scoring something `listen`
+never hears. A recording has a second of quiet room before the speech; a live stretch of speech
+starts on its first sound. Cut that way the spotter fired on 6 clips in 81, not 63, and the
+recogniser got 36 of 46 listed requests where it had got 40. Every stretch now comes with the
+0.4 s the microphone heard before it (`kLeadIn`, `--lead-in`) — real audio, because zeros in front
+do not work — and `eval` cuts each recording the way `listen` would. `scripts/replay.sh` is the
+check that found it.
+
+**Found:** this speaker's "Hey Mio" reaches the recogniser as "Amio" — 19 times in 81 — and as
+"Emio", "Hey Miu", "And my", "Hey my", "Emil". Six spellings were added; the ones ordinary speech
+also opens with were not.
+
+**Decided:** either detector wakes it (`--wake both`, the default). They miss different clips.
+
+**Decided:** the phrase is removed from the transcript, never cut from the audio. The spotter's
+"it ended here" is late often enough to take the first word of the request: 23 of 46 listed
+requests right when cut, 38 when stripped.
+
+**Decided:** the speech model's window is 15 s, not 30. A stretch of speech is at most 12 s, and on
+recordings the shorter window was no less accurate and twice as fast. The closed-list match is
+0.30, from 0.25: two more listed requests answered, none let in that should not be.
+
+**Rejected:** giving the recogniser the spelling as a hint. It looked like the best result of the
+day until the leading silence was trimmed from the recordings; then it fell from 63 to 5, because
+with the hint the recogniser treats the phrase as already said and skips it.
+
+**Not done, and it matters more now:** how often it wakes when nobody called it. Both detectors
+were loosened, and these recordings cannot answer it — every one contains the phrase. A third of
+listed requests are still heard wrongly. One voice, one microphone, and nobody has yet spoken to
+`listen` live. The held-out half was run twice, once before the scoring was corrected; both runs
+are in the vault's `VOICE_EVAL.md`.
+
+---
+
 ## 2026-11-23 — H3.3: the outbox, proven in Gazebo across an outage
 
 `src/mio_gateway/scripts/outbox_proof.sh` runs the whole thing headless and checks it: Gazebo, Nav2,
@@ -158,6 +205,46 @@ keyboard driving is hold-to-drive, and a tap is a quarter-second nudge.
 **Found:** `ros2 launch` killed with SIGTERM exits and leaves every child running (4 of 4 here). A
 supervisor left over from an earlier run is a second publisher on `/cmd_vel_safe`. Stop launches
 with Ctrl-C; that was checked and leaves nothing behind.
+
+---
+
+## 2026-10-12 — H4.0: the offline voice pipeline, standalone on a laptop (built, not yet measured on a voice)
+
+`src/mio_voice` is no longer a scaffold. It is a C++ program, `mio_voice`, that runs the whole
+offline chain with no robot, no ROS and no network: wake phrase → whisper.cpp → the four named
+stages → a Piper voice. Plain CMake with `COLCON_IGNORE`; engines and models live in
+`~/.cache/mio_voice`, fetched by `scripts/fetch_deps.sh` with pinned checksums. `README.md` in the
+package has the build, the commands and how to measure.
+
+`src/core.cpp` holds every decision and links no engine, so the stage order and the rule that
+cannot bend are tested without one: **if local search returns nothing, the model is never
+started.** The model is a child process (`llama-completion`), so that is a process count, and it
+may only emit `{"row": N, "ask": "where"|"when"|"none"}` — a template speaks the reply.
+
+**Not done.** H4.0's exit check needs real recordings and there are none yet. Everything measured
+so far is on text or on synthetic speech; the numbers and what is still missing are in the vault's
+`VOICE_EVAL.md`. Record with `src/mio_voice/scripts/record.sh`.
+
+**Found:** an English wake phrase in front of Urdu speech makes whisper's language detector call
+the whole thing English and transcribe the Urdu as nonsense. The language is now judged on the
+audio after the first 0.9 s, and the phrase is stripped from the transcript.
+
+**Found:** left to choose among all its languages, the detector often hears Urdu as Hindi and
+writes Devanagari. Only English or Urdu is allowed; Hindi counts as Urdu.
+
+**Found:** a vocabulary prompt (a list of room and object names) made the recogniser echo the list
+back instead of the speech. Removed.
+
+**Found:** Qwen3.5's chat template aborts `llama-completion` on a lone system message ("No user
+query found"), so the instructions go in the user turn. With the model's default context a 1.1 GB
+model peaked at 2.7 GB; `-c 1024` brings a 0.5 GB model to under 0.9 GB.
+
+**Found:** the keyword spotter misses a good share of synthetic "Hey Mio"s, fewer with the
+full-precision model files and a wider search than with its defaults. A second detector — the
+first 2.5 s transcribed as English — exists alongside it; which one ships is decided on recordings.
+
+**Found:** `unshare -rn` is blocked by AppArmor on Ubuntu 26.04. `bwrap --unshare-net` is not, and
+is how "runs with no network" is shown.
 
 ---
 
