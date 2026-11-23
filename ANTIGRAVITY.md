@@ -74,5 +74,10 @@ ctest --test-dir ~/.cache/mio_voice/build
 `H4.0` is built and measured on **one** person's recordings: tuned on half, it wakes on 78 of 82
 clips of the other half and answers 53 correctly, a listed command in about 4 s. **Not done:** the
 false-wake rate is unmeasured, there is no second speaker, nobody has spoken to it through a live
-microphone, and a third of listed requests are still heard wrongly (the vault's `VOICE_EVAL.md`). The build-order chain's "voice" means voice on the robot
+microphone, and a third of listed requests are still heard wrongly (the vault's `VOICE_EVAL.md`).
+**Two things a change to `mio_voice` must keep (HEART_DECISIONS 51):** a stretch of speech is handed
+on with the 0.4 s the microphone heard before it (`kLeadIn`) — without it the keyword spotter fired
+on 6 recordings in 81 instead of 65, and zeros in front do not do — and `eval` scores a recording
+cut the way `listen` hears it, not the whole file. Run `src/mio_voice/scripts/replay.sh` after
+touching how audio reaches the detectors: `eval` alone agreed with itself while `listen` was deaf. The build-order chain's "voice" means voice on the robot
 (`H4.1`–`H4.4`); `H4.0` is a laptop program outside it (HEART_DECISIONS 42).
