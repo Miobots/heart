@@ -32,6 +32,13 @@ else does — a goal to Nav2, whose velocities go through the supervisor — and
 publisher of its own. Its token comes from the environment (`DEV_TOKEN`), never from a ROS parameter
 and never from a default in the code (HEART_DECISIONS 49).
 
+**An event is on disk before it is on the wire, and leaves only on the Brain's receipt** (ENVELOPE
+§8, HEART_DECISIONS 50). `session.rs` decides — `Out::Store` before the `Out::Send` of the same
+event, `Out::Forget` on `ACK sys.receipt` — and `outbox.rs` keeps the files. Never trim on send: a
+link can drop with the event in flight, and an unconfirmed event goes out again after every welcome.
+Whether a topic waits is `queues_in_outbox`, held to `miobots-protocol/conformance/outbox.json` by
+the conformance test; a new event topic is decided there first, never here alone.
+
 **The wheels listen to `/cmd_vel_safe`, and only `mio_safety_supervisor` publishes it**
 (HEART_DECISIONS 47). Everything that wants to drive — Nav2, teleop, later the gateway — publishes
 `/cmd_vel`. Never bridge `/cmd_vel` to the motors, and never publish `/cmd_vel_safe` from anywhere
@@ -137,9 +144,11 @@ the same node locks the wheels when the robot tips past 30° and keeps them lock
 `~/clear`. Phase 3 has started: `H3.1` — `mio_gateway` dials the Brain, turns `nav.goto` into a
 Nav2 goal and sends progress and the result back, reports the supervisor's faults, and says what
 the robot can do (`navigation.launch.py gateway:=true`); it remembers command keys for ten minutes
-and sends a heartbeat every 5 s, which is `H3.4`. **Not started:** the durable outbox (`H3.2` — what
-happens during an outage is held in memory only), telemetry to the app (pose, battery, map), speech,
-and everything after. `mio_bringup` has no launch files yet.
+and sends a heartbeat every 5 s, which is `H3.4`; `H3.2` — every event waits on disk in the
+`outbox_dir` parameter (default `~/.local/state/mio_gateway/outbox`) until the Brain confirms it, and
+survives the gateway being killed; `H3.3` — `src/mio_gateway/scripts/outbox_proof.sh` proves it in
+Gazebo across a Brain outage with a goal in flight. **Not started:** telemetry to the app (pose,
+battery, map), speech, and everything after. `mio_bringup` has no launch files yet.
 
 **`H4.0` is built but not finished.** `src/mio_voice` is the offline voice pipeline running
 standalone on a laptop — wake phrase, whisper.cpp, the four stages, a ~1B model as a child process,

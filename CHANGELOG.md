@@ -52,6 +52,56 @@ are in the vault's `VOICE_EVAL.md`.
 
 ---
 
+## 2026-11-23 — H3.3: the outbox, proven in Gazebo across an outage
+
+`src/mio_gateway/scripts/outbox_proof.sh` runs the whole thing headless and checks it: Gazebo, Nav2,
+the supervisor, this gateway and the real Brain, on their own ROS domain and Gazebo partition, with
+`wiretap.ts` (Bun, no dependencies) between gateway and Brain writing down every message and
+`app_goal.ts` playing the app. The Brain is killed while the robot drives to the living room; the
+drive ends (`success: true`) and the robot is tipped over with no Brain; the gateway is `kill -9`ed
+and restarted; and when the Brain returns, every stored event crosses once, in order, with the time
+it happened, and is confirmed before it leaves the disk. All checks passed.
+
+**Found:** a loaded machine fails it. With another process on four cores, Gazebo fell behind real
+time, the supervisor called the IMU silent, and Nav2's answer missed the gateway's 5 s.
+
+**Found (Brain):** a goal started from the app is not one the Brain tracks; its progress and result
+are logged as "unmatched" and dropped.
+
+---
+
+## 2026-11-23 — H3.2: the durable outbox
+
+`mio_gateway` keeps every event on disk until the Brain confirms it. An event — `nav.result`,
+`diag.fault`, whatever `queues_in_outbox` names — is a file in `outbox_dir` before it is on the wire,
+and leaves only when an `ACK sys.receipt` names its `msg_id` (ENVELOPE §8). Whatever the Brain has
+not confirmed goes out again, oldest first, after every welcome, with its `msg_id` and both clocks
+and a fresh `seq`. This replaces the hundred facts held in memory since H3.1.
+
+`src/outbox.rs` is the disk: one file per event, numbered rather than named by `msg_id` (whose time
+half follows a wall clock that can jump back), written beside its name, flushed, renamed into place
+and the directory flushed. `session.rs` still decides everything and does no I/O: it says
+`Out::Store` before the `Out::Send` of the same event and `Out::Forget` on a receipt, and `main.rs`
+does both — including during an outage, where it used to drop what the session said.
+
+Verified with the real node and the real Brain (`feat/event-receipts`): with no Brain and no
+supervisor the gateway raised `SAFETY_SUPERVISOR_NO_DATA` and stored it; `kill -9`; the file was
+still there; Brain up, gateway restarted — "1 event(s) still waiting", let in, sent, and deleted on
+the receipt. `cargo test`: 25 library tests and 3 conformance tests.
+
+**Decided:** progress (`nav.feedback`) never waits, nor do heartbeats or the manifest — stale a
+moment later, and a fsynced write a second while driving would wear the card for nothing. The
+protocol said progress queues; it now agrees (`miobots-protocol` `conformance/outbox.json`, which
+the conformance test holds this side to).
+
+**Found:** the Brain never sent `sys.receipt`, so an outbox could never have been trimmed. It does
+now (brain `feat/event-receipts`), and acts on a re-sent copy once.
+
+**Found:** the gateway does not stop on SIGINT, before this change as well as after; SIGTERM stops
+it. With the outbox that costs a slow shutdown, not events.
+
+---
+
 ## 2026-11-18 — H3.1: the gateway dials the Brain and drives the simulated robot
 
 `src/mio_gateway` is no longer a scaffold. It dials the Brain over WebSocket, says hello, and turns

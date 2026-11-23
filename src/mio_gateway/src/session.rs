@@ -5,9 +5,9 @@
 //! the difference is noted at the line that follows the Brain. Where this file and a conformance
 //! vector disagree, the vector is the bug report.
 
-use crate::{decode, known_topic};
+use crate::{decode, known_topic, queues_in_outbox};
 use serde_json::{json, Map, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::time::Duration;
 
 pub const PROTOCOL_VERSION: u64 = 1;
@@ -26,10 +26,10 @@ pub const ANSWER_WITHIN: Duration = Duration::from_secs(5);
 /// Only coarse, infrequent messages cross (ENVELOPE §1): Nav2 reports progress at ~50 Hz, the
 /// Brain hears it once a second.
 pub const FEEDBACK_EVERY: Duration = Duration::from_secs(1);
-/// ponytail: facts that happen while the link is down wait here, in memory, so a goal that ends
-/// during an outage does not leave the Brain believing it is still running. Lost on a restart,
-/// and capped. The durable on-disk outbox (H3.2) replaces this.
-pub const HELD_MAX: usize = 100;
+/// Events waiting for the Brain to confirm them (H3.2). At the cap the oldest is dropped, loudly.
+/// ponytail: a count, not bytes. Events are a few hundred bytes, so 10 000 is a few MB of card and
+/// days of a robot with no link; pictures get their own byte cap at H7.2 (HEART_DECISIONS 46).
+pub const OUTBOX_MAX: usize = 10_000;
 
 /// The two clocks every envelope carries (ENVELOPE §7), read by the caller so this stays testable.
 #[derive(Clone, Copy, Debug)]
@@ -59,6 +59,15 @@ pub enum Out {
     Robot(Robot),
     /// Give up on this connection, and why. The caller closes and dials again.
     Close(String),
+    /// An event to put on disk. It comes before the `Send` of the same event: the outbox holds it
+    /// before it is ever on the wire (H3.2).
+    Store(Value),
+    /// Events to delete from disk. `confirmed` is false when a full outbox dropped its oldest —
+    /// that loses history, and is said loudly.
+    Forget {
+        msg_ids: Vec<String>,
+        confirmed: bool,
+    },
 }
 
 /// How a navigation goal ended, as the robot reports it.
@@ -91,6 +100,11 @@ pub fn place(name: &str) -> String {
     name.trim().to_lowercase().replace(['_', '-'], " ")
 }
 
+/// The `msg_id` of an envelope this side built: an event's name in the outbox and in a receipt.
+fn msg_id(envelope: &Value) -> String {
+    envelope["msg_id"].as_str().unwrap_or_default().to_owned()
+}
+
 /// The payload of an ACK that says no. A refusal is an answer, not an error (ENVELOPE §3).
 fn refusal(reason: &str) -> Value {
     json!({ "accepted": false, "reason": reason, "exec_status": "rejected" })
@@ -117,7 +131,7 @@ pub struct Session {
     nav_ready: bool,       // Nav2 is there to take a goal
     pose: Option<Pose>,    // the last place the robot reported being
     seen: HashMap<String, (Seen, Duration)>,
-    held: Vec<Value>,
+    outbox: VecDeque<Value>, // events the Brain has not confirmed, oldest first
 }
 
 impl Session {
@@ -141,7 +155,7 @@ impl Session {
             nav_ready: false,
             pose: None,
             seen: HashMap::new(),
-            held: Vec::new(),
+            outbox: VecDeque::new(),
         }
     }
 
@@ -164,7 +178,14 @@ impl Session {
         hello
     }
 
-    /// The socket is gone. Until the next welcome, facts are held and everything else is dropped.
+    /// Events a previous run stored and the Brain never confirmed, oldest first. They go out after
+    /// the next welcome, like everything else still waiting.
+    pub fn restore(&mut self, events: Vec<Value>) {
+        self.outbox.extend(events);
+    }
+
+    /// The socket is gone. Until the next welcome, events wait in the outbox and everything else is
+    /// dropped.
     pub fn disconnected(&mut self) {
         self.welcomed = false;
     }
@@ -213,22 +234,61 @@ impl Session {
         vec![Out::Send(self.envelope(kind, topic, corr_id, payload, now))]
     }
 
-    /// A fact — it happened, and it is still true later. With no link it waits, keeping its
-    /// `msg_id` and both clocks, and is given a fresh `seq` when it is finally sent (ENVELOPE §8).
-    fn fact(&mut self, topic: &str, corr_id: Option<&str>, payload: Value, now: Now) -> Vec<Out> {
+    /// An event. A fact (`queues_in_outbox`) is stored before it is sent, and stays stored until
+    /// the Brain confirms it; until then it goes out again after every welcome, keeping its
+    /// `msg_id` and both clocks, with a fresh `seq` (ENVELOPE §8). Anything else describes now, and
+    /// is said now or not at all.
+    fn event(&mut self, topic: &str, corr_id: Option<&str>, payload: Value, now: Now) -> Vec<Out> {
+        if !queues_in_outbox("EVT", topic) {
+            return self.say("EVT", topic, corr_id, payload, now);
+        }
         let seq = self.seq;
         let envelope = self.envelope("EVT", topic, corr_id, payload, now);
+        let mut out = Vec::new();
+        if self.outbox.len() >= OUTBOX_MAX {
+            if let Some(oldest) = self.outbox.pop_front() {
+                let msg_ids = vec![msg_id(&oldest)];
+                out.push(Out::Forget {
+                    msg_ids,
+                    confirmed: false,
+                });
+            }
+        }
+        self.outbox.push_back(envelope.clone());
+        out.push(Out::Store(envelope.clone()));
         if self.welcomed {
-            return vec![Out::Send(envelope)];
+            out.push(Out::Send(envelope));
+        } else {
+            // Not sent, so not numbered: a `seq` used up here would be a gap on the wire, and a
+            // gap means a lost message to whoever is counting (ENVELOPE §6).
+            self.seq = seq;
         }
-        // Not sent, so not numbered: a `seq` used up here would be a gap on the wire, and a gap
-        // means a lost message to whoever is counting (ENVELOPE §6).
-        self.seq = seq;
-        if self.held.len() == HELD_MAX {
-            self.held.remove(0);
+        out
+    }
+
+    /// The Brain confirms it holds these events (`ACK sys.receipt`): only now do they leave the
+    /// outbox. Never on send — a link can drop with a message still in flight.
+    fn confirmed(&mut self, payload: &Value) -> Vec<Out> {
+        let named: Vec<&str> = payload["msg_ids"]
+            .as_array()
+            .map(|ids| ids.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        let mut msg_ids = Vec::new();
+        self.outbox.retain(|event| {
+            let id = msg_id(event);
+            let keep = !named.contains(&id.as_str());
+            if !keep {
+                msg_ids.push(id);
+            }
+            keep
+        });
+        if msg_ids.is_empty() {
+            return Vec::new();
         }
-        self.held.push(envelope);
-        Vec::new()
+        vec![Out::Forget {
+            msg_ids,
+            confirmed: true,
+        }]
     }
 
     /// Sends an ACK and remembers it against the command's key, so a retry gets the same answer.
@@ -292,12 +352,15 @@ impl Session {
                 return vec![Out::Close(format!("the Brain refused sys.hello: {reason}"))];
             }
             self.welcomed = true;
-            // First what the robot can do now, then whatever happened while nobody was listening.
+            // First what the robot can do now, then every event the Brain has not confirmed — what
+            // happened while nobody was listening, and anything whose receipt was lost with the
+            // last link. They stay in the outbox until confirmed.
             let mut out = self.publish_manifest(now);
-            for mut fact in std::mem::take(&mut self.held) {
+            let waiting: Vec<Value> = self.outbox.iter().cloned().collect();
+            for mut event in waiting {
                 self.seq = self.seq.wrapping_add(1);
-                fact["seq"] = json!(self.seq);
-                out.push(Out::Send(fact));
+                event["seq"] = json!(self.seq);
+                out.push(Out::Send(event));
             }
             return out;
         }
@@ -305,8 +368,11 @@ impl Session {
         if !known_topic(&topic) {
             return self.error("unknown_topic", Some("topic"), Some(&message), now);
         }
+        if kind == "ACK" && topic == "sys.receipt" {
+            return self.confirmed(payload);
+        }
         if kind != "CMD" {
-            // Heartbeats and receipts: being heard from is all they are for, until the outbox.
+            // Heartbeats: being heard from is all they are for.
             return Vec::new();
         }
 
@@ -445,7 +511,7 @@ impl Session {
             "distance_remaining_m": remaining_m,
             "estimated_time_remaining_s": remaining_s,
         });
-        self.say("EVT", "nav.feedback", Some(corr_id), payload, now)
+        self.event("nav.feedback", Some(corr_id), payload, now)
     }
 
     /// The goal is over, one way or another. Always said: the Brain takes no new goal while it
@@ -467,7 +533,7 @@ impl Session {
             Ended::Cancelled => payload["reason"] = json!("cancelled"),
             Ended::Aborted => payload["reason"] = json!("aborted"),
         }
-        self.fact("nav.result", Some(&goal.corr_id), payload, now)
+        self.event("nav.result", Some(&goal.corr_id), payload, now)
     }
 
     /// Where the robot says it is.
@@ -485,7 +551,7 @@ impl Session {
         if let Some(code) = self.fault.clone() {
             let payload =
                 json!({ "subsystem": "safety_supervisor", "code": code, "severity": "error" });
-            out = self.fact("diag.fault", None, payload, now);
+            out = self.event("diag.fault", None, payload, now);
         }
         out.extend(self.publish_manifest(now));
         out
@@ -521,7 +587,7 @@ impl Session {
             return Vec::new();
         }
         (self.manifest, self.manifest_at) = (manifest.clone(), now.mono);
-        self.say("EVT", "cap.manifest", None, manifest, now)
+        self.event("cap.manifest", None, manifest, now)
     }
 
     /// Call about once a second: heartbeat and manifest when they are due, and gives up on a link
@@ -547,7 +613,7 @@ impl Session {
             // and fault, and that carries a wall-clock time.
             let status = if self.fault.is_some() { "fault" } else { "ok" };
             let payload = json!({ "status": status, "t_wall_ms": now.wall_ms });
-            out.extend(self.say("EVT", "sys.heartbeat", None, payload, now));
+            out.extend(self.event("sys.heartbeat", None, payload, now));
         }
         if self.welcomed && now.mono.saturating_sub(self.manifest_at) >= MANIFEST_EVERY {
             self.manifest = Value::Null; // due again, changed or not
@@ -599,6 +665,27 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    /// The events in `outs` put on disk, in order.
+    fn stored(outs: &[Out]) -> Vec<Value> {
+        outs.iter()
+            .filter_map(|out| match out {
+                Out::Store(envelope) => Some(envelope.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The Brain confirming events by `msg_id` (ENVELOPE §8).
+    fn receipt(msg_ids: &[&Value]) -> Vec<u8> {
+        json!({
+            "msg_id": "01BRAINRECEIPT", "corr_id": "01BRAINRECEIPT", "t_mono_ns": "1",
+            "t_wall_ms": WALL, "kind": "ACK", "topic": "sys.receipt", "seq": 7,
+            "payload": { "msg_ids": msg_ids },
+        })
+        .to_string()
+        .into_bytes()
     }
 
     fn robot(outs: &[Out]) -> Vec<Robot> {
@@ -970,7 +1057,7 @@ mod tests {
         // A fault that arrives between the hello and the welcome waits, and leaves no gap in seq.
         let mut connecting = Session::new("heart-test", "token", regions());
         let hello = connecting.connect(at(0));
-        assert!(connecting.fault(Some("TIP_OVER".into()), at(5)).is_empty());
+        assert!(sent(&connecting.fault(Some("TIP_OVER".into()), at(5))).is_empty());
         let out = sent(&welcome(&mut connecting, &hello, at(10)));
         let seqs: Vec<_> = out.iter().map(|e| e["seq"].as_u64().unwrap()).collect();
         assert_eq!((hello["seq"].as_u64(), seqs), (Some(1), vec![2, 3]));
@@ -1087,9 +1174,9 @@ mod tests {
         // The robot keeps driving and arrives; progress is worth nothing later, the result is.
         assert!(session.progress("C7", 1.0, 2.0, at(1_000)).is_empty());
         session.pose((3.2, -1.1, 1.57));
-        assert!(session
-            .goal_ended("C7", Ended::Succeeded, at(4_000))
-            .is_empty());
+        let ended = session.goal_ended("C7", Ended::Succeeded, at(4_000));
+        assert!(sent(&ended).is_empty());
+        assert_eq!(stored(&ended).len(), 1, "on disk, waiting");
 
         let hello = session.connect(at(60_000));
         assert_eq!(hello["seq"], 1, "seq starts again with the connection");
@@ -1107,9 +1194,10 @@ mod tests {
         assert_eq!(
             seqs,
             [2, 3],
-            "the manifest, then what was held, numbered for this connection"
+            "the manifest, then what waited, numbered for this connection"
         );
-        // Said once: the next connection has nothing left to deliver.
+        // Once the Brain confirms it, the next connection has nothing left to deliver.
+        session.inbound(&receipt(&[&results[0]["msg_id"]]), at(60_020));
         session.disconnected();
         let hello = session.connect(at(120_000));
         assert!(on(
@@ -1117,6 +1205,118 @@ mod tests {
             &sent(&welcome(&mut session, &hello, at(120_010)))
         )
         .is_empty());
+    }
+
+    #[test]
+    fn an_event_is_on_disk_before_the_wire_and_leaves_only_when_the_brain_confirms_it() {
+        let mut session = welcomed();
+        session.inbound(&goto("C7", "key-C7", "g-88"), at(0));
+        session.goal_answered("C7", true, at(10));
+        let outs = session.goal_ended("C7", Ended::Succeeded, at(1_000));
+        assert!(
+            matches!(&outs[..], [Out::Store(a), Out::Send(b)] if a["msg_id"] == b["msg_id"]),
+            "stored first, then sent: {outs:?}"
+        );
+        let result = sent(&outs)[0].clone();
+
+        // Sent is not confirmed: a receipt for something else trims nothing, and a link that drops
+        // before the receipt means it goes again — same msg_id and clocks, a fresh seq.
+        assert!(session
+            .inbound(&receipt(&[&json!("other")]), at(1_100))
+            .is_empty());
+        session.disconnected();
+        let hello = session.connect(at(5_000));
+        let again = on(
+            "nav.result",
+            &sent(&welcome(&mut session, &hello, at(5_010))),
+        );
+        assert_eq!(again.len(), 1);
+        assert_eq!(again[0]["msg_id"], result["msg_id"]);
+        assert_eq!(again[0]["t_wall_ms"], result["t_wall_ms"]);
+        assert_eq!(again[0]["seq"], 3, "after the hello and the manifest");
+
+        // Confirmed: deleted from disk, and never sent again.
+        let outs = session.inbound(&receipt(&[&result["msg_id"]]), at(5_100));
+        let id = result["msg_id"].as_str().unwrap().to_owned();
+        assert_eq!(
+            outs,
+            [Out::Forget {
+                msg_ids: vec![id],
+                confirmed: true
+            }]
+        );
+        assert!(session
+            .inbound(&receipt(&[&result["msg_id"]]), at(5_200))
+            .is_empty());
+        session.disconnected();
+        let hello = session.connect(at(9_000));
+        assert!(on(
+            "nav.result",
+            &sent(&welcome(&mut session, &hello, at(9_010)))
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn events_a_previous_run_left_go_out_after_the_welcome_in_order() {
+        let mut first = welcomed();
+        first.inbound(&goto("C7", "key-C7", "g-88"), at(0));
+        first.goal_answered("C7", true, at(10));
+        first.disconnected();
+        let mut left = stored(&first.fault(Some("TIP_OVER".into()), at(100)));
+        left.extend(stored(&first.goal_ended("C7", Ended::Aborted, at(200))));
+        assert_eq!(left.len(), 2);
+
+        // A new process: what was on disk comes back before the first connection.
+        let mut session = Session::new("heart-test", "token", regions());
+        session.restore(left.clone());
+        let hello = session.connect(at(0));
+        let out = sent(&welcome(&mut session, &hello, at(10)));
+        let topics: Vec<_> = out.iter().map(|e| e["topic"].clone()).collect();
+        assert_eq!(topics, ["cap.manifest", "diag.fault", "nav.result"]);
+        assert_eq!(out[1]["msg_id"], left[0]["msg_id"]);
+        assert_eq!(out[2]["msg_id"], left[1]["msg_id"]);
+        let seqs: Vec<_> = out.iter().map(|e| e["seq"].as_u64().unwrap()).collect();
+        assert_eq!(seqs, [2, 3, 4], "numbered for this connection, no gap");
+    }
+
+    #[test]
+    fn what_is_stale_a_moment_later_is_never_stored() {
+        let mut session = welcomed();
+        session.inbound(&goto("C7", "key-C7", "g-88"), at(0));
+        session.goal_answered("C7", true, at(10));
+        let mut outs = session.progress("C7", 2.0, 5.0, at(1_000));
+        outs.extend(session.tick(at(5_000))); // a heartbeat
+        outs.extend(session.tick(at(10_010))); // and the manifest, due again
+        let topics: Vec<_> = sent(&outs).iter().map(|e| e["topic"].clone()).collect();
+        assert_eq!(
+            topics,
+            [
+                "nav.feedback",
+                "sys.heartbeat",
+                "sys.heartbeat",
+                "cap.manifest"
+            ]
+        );
+        assert!(stored(&outs).is_empty());
+    }
+
+    #[test]
+    fn a_full_outbox_drops_its_oldest_and_says_so() {
+        let mut session = welcomed();
+        let old: Vec<Value> = (0..OUTBOX_MAX)
+            .map(|n| json!({ "msg_id": format!("OLD{n}"), "kind": "EVT", "topic": "diag.fault" }))
+            .collect();
+        session.restore(old);
+        let outs = session.fault(Some("TIP_OVER".into()), at(50));
+        assert_eq!(
+            outs[0],
+            Out::Forget {
+                msg_ids: vec!["OLD0".into()],
+                confirmed: false
+            }
+        );
+        assert_eq!(stored(&outs).len(), 1);
     }
 
     #[test]

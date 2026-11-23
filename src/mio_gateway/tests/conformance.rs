@@ -1,4 +1,4 @@
-use mio_gateway::{decode, parse_teleop_frame};
+use mio_gateway::{decode, parse_teleop_frame, queues_in_outbox};
 use serde_json::Value;
 use std::{fs, path::PathBuf};
 
@@ -53,5 +53,25 @@ fn teleop_vectors_match_typescript() {
                 vector["description"]
             );
         }
+    }
+}
+
+/// Which messages wait in the outbox. The Brain confirms by the TypeScript list; an event stored
+/// here that the Brain never confirms would be re-sent after every reconnect, for ever.
+#[test]
+fn outbox_vectors_match_typescript() {
+    let vectors: Value =
+        serde_json::from_slice(&fs::read(vectors().join("outbox.json")).unwrap()).unwrap();
+    for vector in vectors.as_array().unwrap() {
+        let (kind, topic) = (
+            vector["kind"].as_str().unwrap(),
+            vector["topic"].as_str().unwrap(),
+        );
+        assert_eq!(
+            queues_in_outbox(kind, topic),
+            vector["queues"].as_bool().unwrap(),
+            "{kind} {topic}: {}",
+            vector["description"]
+        );
     }
 }
