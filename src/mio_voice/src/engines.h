@@ -34,6 +34,12 @@ namespace mio {
 
 constexpr int kSampleRate = 16000;  // what every recogniser here expects
 
+/// How much of what the microphone heard just before a stretch of speech is kept in front of it,
+/// in seconds (`--lead-in`). Handed speech from its very first sample the keyword spotter fired on
+/// 6 recordings of a person in 81; with 0.3 to 0.5 s of the room in front, on 64 to 67. It has to
+/// be real audio: the same length of zeros gave 29 (VOICE_EVAL section 3b).
+constexpr double kLeadIn = 0.4;
+
 double now_ms();
 
 // ---- audio files ------------------------------------------------------------------------------
@@ -102,19 +108,27 @@ class WakeWord {
 
 class Vad {
  public:
-  Vad(const std::string& model_path, float min_silence_s);
+  Vad(const std::string& model_path, float min_silence_s, double lead_in_s = kLeadIn);
   ~Vad();
   Vad(const Vad&) = delete;
 
   void feed(const float* samples, int n);
   bool speaking() const;
-  /// A finished stretch of speech, oldest first, or nothing if none has finished yet.
+  /// A finished stretch of speech, oldest first, or nothing if none has finished yet. It comes
+  /// with the lead-in in front: what was heard just before the speech began.
   std::optional<std::vector<float>> pop();
+  /// About the stretch `pop` last returned: where it starts, in samples since `reset`, and how
+  /// many of its first samples are lead-in rather than speech.
+  size_t last_start() const { return last_start_; }
+  size_t last_lead() const { return last_lead_; }
   void reset();
 
  private:
   const SherpaOnnxVoiceActivityDetector* vad_;
   std::vector<float> pending_;  // the model takes fixed windows; this holds the remainder
+  std::vector<float> recent_;   // the last seconds fed; recent_[0] is sample number recent_start_
+  size_t recent_start_ = 0, last_start_ = 0, last_lead_ = 0;
+  const size_t lead_in_;        // samples
 };
 
 // ---- speech synthesis -------------------------------------------------------------------------

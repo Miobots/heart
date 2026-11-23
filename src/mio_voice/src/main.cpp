@@ -51,6 +51,11 @@ int64_t wall_ms() {
   return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
 
+/// The speech model's encoder window, in 20 ms frames: 15 s, where the model's own is 30 s. A
+/// stretch of speech is at most 12 s long (the voice-activity detector cuts it there), and on
+/// recordings of a person the shorter window halved the time and cost no accuracy.
+constexpr int kAudioCtx = 768;
+
 /// Everything a subcommand needs, with the engines loaded only when first asked for.
 struct Pipeline {
   Options options;
@@ -79,7 +84,7 @@ struct Pipeline {
       const std::string name = options.get("whisper", "small");
       const bool is_path = name.find('/') != std::string::npos || name.find(".bin") != std::string::npos;
       stt_ = std::make_unique<Stt>(model_path(is_path ? name : "ggml-" + name + ".bin"), threads,
-                                   static_cast<int>(options.number("audio-ctx", 0)));
+                                   static_cast<int>(options.number("audio-ctx", kAudioCtx)));
     }
     return *stt_;
   }
@@ -117,7 +122,8 @@ struct Pipeline {
 
   Vad& vad() {
     if (!vad_) vad_ = std::make_unique<Vad>(home + "/models/silero_vad.onnx",
-                                            static_cast<float>(options.number("silence", 0.6)));
+                                            static_cast<float>(options.number("silence", 0.6)),
+                                            options.number("lead-in", kLeadIn));
     return *vad_;
   }
 
@@ -172,8 +178,13 @@ struct Request {
 ///
 /// The phrase is English whatever follows it, and the language detector takes its cue from the
 /// first second — so "Hey Mio" followed by Urdu is called English and transcribed as nonsense. The
-/// language is therefore judged on the audio after the first 0.9 s, and the phrase is then removed
-/// from the transcript: loosely, because it is already known to be there.
+/// language is therefore judged on the audio after the first 0.9 s of the stretch, and the phrase
+/// is then removed from the transcript: loosely, because it is already known to be there.
+///
+/// That 0.9 s includes the lead-in (kLeadIn), so it lands about half a second into the speech —
+/// part-way through the phrase, not after it. Measured on a person, that is the better place:
+/// 40 of 46 listed requests right, against 35 when the whole phrase was skipped (1.3 s), which
+/// leaves a short command too little audio to judge (VOICE_EVAL section 3b).
 Request after_wake_phrase(Pipeline& p, const std::vector<float>& speech) {
   constexpr size_t kSkip = kSampleRate * 9 / 10;
   Heard guess;
@@ -261,6 +272,8 @@ double percentile(std::vector<double> values, double fraction) {
 }
 
 /// Feeds a whole clip to the wake-word spotter, with a tail of silence so the last word is decoded.
+/// Whether the keyword spotter fires on a stretch of speech (which has its lead-in in front: the
+/// spotter needs it, see kLeadIn).
 std::optional<WakeWord::Hit> spot(WakeWord& wake, const std::vector<float>& clip) {
   wake.reset();
   std::vector<float> padded = clip;
@@ -270,6 +283,24 @@ std::optional<WakeWord::Hit> spot(WakeWord& wake, const std::vector<float>& clip
     hit = wake.feed(padded.data() + at, static_cast<int>(std::min<size_t>(1600, padded.size() - at)));
   }
   return hit;
+}
+
+/// Cuts the front of a recording down to what `listen` would be handed: speech from where it
+/// starts, with the lead-in before it. Scored on whole files — about a second of quiet room in
+/// front — and heard live are different things, and both detectors and the recogniser care.
+///
+/// ponytail: cut at the first onset only. A pause long enough to split a recording in two is not
+/// replayed the way `listen` takes it (the phrase alone, then the request). Upgrade: run eval
+/// through the same loop as `listen`, fed from the file.
+void cut_to_speech(Vad& vad, std::vector<float>& clip) {
+  vad.reset();
+  vad.feed(clip.data(), static_cast<int>(clip.size()));
+  const std::vector<float> quiet(kSampleRate, 0.0f);  // enough silence to close the stretch
+  vad.feed(quiet.data(), static_cast<int>(quiet.size()));
+  if (vad.pop()) {
+    clip.erase(clip.begin(), clip.begin() + static_cast<std::ptrdiff_t>(std::min(vad.last_start(), clip.size())));
+  }
+  vad.reset();
 }
 
 /// How often the wake phrase fires on audio that does not contain it: a long recording of ordinary
@@ -288,23 +319,35 @@ int eval_background(Pipeline& p) {
     }
   }
 
-  int transcript_fired = 0, segments = 0;
+  // And as `listen` runs by default: each stretch of speech goes to the spotter, then the transcript.
+  int transcript_fired = 0, stretch_spotter_fired = 0, either_fired = 0, segments = 0;
   p.vad().reset();
   for (size_t at = 0; at + 1600 <= audio.size(); at += 1600) {
     p.vad().feed(audio.data() + at, 1600);
     while (const auto segment = p.vad().pop()) {
       segments++;
-      if (opens_with_wake(p, *segment)) {
-        std::printf("  transcript fired at %.1f s\n", at / double(kSampleRate));
-        transcript_fired++;
+      const bool spotted = spot(p.wake(), *segment).has_value();
+      const bool opened = opens_with_wake(p, *segment);
+      if (spotted || opened) {
+        std::printf("  %s fired at %.1f s\n", spotted && opened ? "both" : spotted ? "spotter" : "transcript",
+                    at / double(kSampleRate));
       }
+      stretch_spotter_fired += spotted;
+      transcript_fired += opened;
+      either_fired += spotted || opened;
     }
   }
 
   std::printf("\n-- false triggers on %.2f hours with no wake phrase in it --\n", hours);
-  std::printf("  keyword spotter:          %d  (%.1f per hour)\n", spotter_fired, spotter_fired / hours);
-  std::printf("  speech opens with it:     %d  (%.1f per hour), over %d stretches of speech\n",
-              transcript_fired, transcript_fired / hours, segments);
+  std::printf("  keyword spotter, always on (--wake kws):  %d  (%.1f per hour)\n", spotter_fired,
+              spotter_fired / hours);
+  std::printf("  over %d stretches of speech:\n", segments);
+  std::printf("    keyword spotter on the stretch:         %d  (%.1f per hour)\n", stretch_spotter_fired,
+              stretch_spotter_fired / hours);
+  std::printf("    speech opens with it (--wake stt):      %d  (%.1f per hour)\n", transcript_fired,
+              transcript_fired / hours);
+  std::printf("    either (--wake both, the default):      %d  (%.1f per hour)\n", either_fired,
+              either_fired / hours);
   return 0;
 }
 
@@ -344,10 +387,10 @@ int eval(Pipeline& p) {
   const auto manifest = read_tsv(p.options.get("manifest", p.config + "/../corpus/manifest.tsv"), 8);
   const std::string audio_dir = p.options.get("audio"), split = p.options.get("split", "all");
   const bool from_audio = !audio_dir.empty();
-  // As in `listen`: the wake phrase is found by one of two detectors, cut out, and only what
-  // follows it is transcribed. Both detectors are counted on every clip; `--wake` picks which
-  // one's verdict the rest of the run follows.
-  const bool by_spotter = p.options.get("wake", "stt") == "kws";
+  // As in `listen`: the wake phrase is found by either of two detectors, and only what follows it
+  // is answered. Both are counted on every clip; `--wake stt` or `--wake kws` follows one alone.
+  const std::string wake_mode = p.options.get("wake", "both");
+  const bool by_spotter = wake_mode == "kws", by_transcript = wake_mode == "stt";
   LanguageModel* llm = p.llm();
   std::FILE* out = p.options.has("out") ? std::fopen(p.options.get("out").c_str(), "w") : nullptr;
   if (out) std::fprintf(out, "id\tbucket\tlang\twant\tgot\tok\tspotter\ttranscript_wake\theard\treply\n");
@@ -369,7 +412,7 @@ int eval(Pipeline& p) {
   std::map<std::string, std::pair<size_t, size_t>> wer;  // lang -> (errors, reference words)
   std::map<std::string, std::vector<double>> latency;    // stage -> ms from end of speech to reply
   std::vector<double> detect_ms, decode_ms, model_ms, tts_ms;
-  Tally spotter, transcript_wake, end_to_end, in_list, false_accept;
+  Tally spotter, transcript_wake, either, end_to_end, in_list, false_accept;
   Tally model_valid, model_right, baseline_right;
   int nothing_retrieved = 0, started_with_nothing = 0, recorded = 0, wanted = 0;
   long model_peak = 0;
@@ -386,12 +429,19 @@ int eval(Pipeline& p) {
       const std::string path = audio_dir + "/" + id + ".wav";
       if (!std::filesystem::exists(path)) continue;
       std::vector<float> clip = read_wav(path);
-      const auto hit = spot(p.wake(), clip);  // live, the spotter runs as the audio arrives: untimed
-      spotted = hit.has_value();
+      cut_to_speech(p.vad(), clip);  // as `listen` is handed it
+      // Timed from here. Both detectors run on every clip so that both can be counted; live, the
+      // transcript check is skipped when the spotter has already fired, so this errs slow.
       const double hearing_start = now_ms();
+      const auto hit = spot(p.wake(), clip);
+      spotted = hit.has_value();
       transcript_woke = opens_with_wake(p, clip);
       // A clip the chosen detector missed would go unanswered live. It is transcribed anyway, as
       // if it had been caught, so that recognition and routing are scored on every clip.
+      // Only `--wake kws` cuts the audio where the spotter says the phrase ended. Measured on a
+      // person, that mark is late often enough to take the first word of the request with it
+      // ("mute yourself" -> "yourself"): 23 of 46 listed requests right, against 38 when the
+      // phrase is taken out of the transcript instead. So the default removes it from the text.
       Request request;
       if (by_spotter && hit) {
         cut_front(clip, hit->end_s);
@@ -411,6 +461,7 @@ int eval(Pipeline& p) {
       wer[lang].second += reference.size();
       spotter.add(spotted);
       transcript_wake.add(transcript_woke);
+      either.add(spotted || transcript_woke);
     }
     recorded++;
 
@@ -431,7 +482,8 @@ int eval(Pipeline& p) {
     const bool right = stage_right && reply.intent == row[5] && (row[6] == "-" || reply.slot == row[6]);
     stage_ok[bucket + " " + lang].add(stage_right);
     intent_ok[bucket + " " + lang].add(right);
-    if (from_audio) end_to_end.add(right && (by_spotter ? spotted : transcript_woke));
+    const bool woke = by_spotter ? spotted : by_transcript ? transcript_woke : spotted || transcript_woke;
+    if (from_audio) end_to_end.add(right && woke);
 
     const bool closed = row[4] == "deterministic" || row[4] == "grammar";
     if (closed) in_list.add(right);
@@ -482,14 +534,16 @@ int eval(Pipeline& p) {
               from_audio ? ("recordings in " + audio_dir).c_str() : "reference text, no audio", recorded,
               wanted, split.c_str());
   std::printf("speech model %s (audio-ctx %s)   language model %s   match threshold %.2f\n",
-              from_audio ? p.options.get("whisper", "small").c_str() : "-", p.options.get("audio-ctx", "full").c_str(),
+              from_audio ? p.options.get("whisper", "small").c_str() : "-",
+              p.options.get("audio-ctx", std::to_string(kAudioCtx)).c_str(),
               llm ? llm->name().c_str() : "none (baseline rule)", p.route_options().match_threshold);
 
   if (from_audio) {
     std::printf("\n-- wake phrase (every clip starts with it); this run follows the %s --\n",
-                by_spotter ? "keyword spotter" : "transcript detector");
+                by_spotter ? "keyword spotter" : by_transcript ? "transcript detector" : "either detector");
     std::printf("  keyword spotter fired                 %s\n", spotter.str().c_str());
     std::printf("  opening words are the wake phrase     %s\n", transcript_wake.str().c_str());
+    std::printf("  either one fired                      %s\n", either.str().c_str());
     std::printf("\n-- word error rate, both sides normalised --\n  %-6s %10s %8s %7s\n", "lang", "ref words", "errors", "WER");
     for (const auto& [lang, counts] : wer) {
       std::printf("  %-6s %10zu %8zu %6.1f%%\n", lang.c_str(), counts.second, counts.first,
@@ -583,7 +637,8 @@ std::optional<std::vector<float>> next_speech(Capture& mic, Vad& vad, double tim
   while (mic.read(chunk, kChunk)) {
     vad.feed(chunk.data(), static_cast<int>(chunk.size()));
     while (auto segment = vad.pop()) {
-      if (segment->size() >= kSampleRate * 3 / 10) return segment;  // shorter is a click or a cough
+      // shorter is a click or a cough
+      if (segment->size() - vad.last_lead() >= kSampleRate * 3 / 10) return segment;
     }
     waited_s += 0.1;
     if (timeout_s > 0 && waited_s > timeout_s && !vad.speaking()) return std::nullopt;
@@ -592,21 +647,24 @@ std::optional<std::vector<float>> next_speech(Capture& mic, Vad& vad, double tim
 }
 
 int listen(Pipeline& p) {
-  // --wake stt: the first seconds of every stretch of speech are checked for the wake phrase.
-  // --wake kws: a small always-on keyword model decides instead.
-  // Either way the phrase is cut out, only what follows is transcribed, the audio never leaves
-  // this process, and speech that does not open with the phrase is dropped unprinted.
-  const bool use_spotter = p.options.get("wake", "stt") == "kws";
+  // --wake both (the default): every stretch of speech is checked by the keyword model and, if
+  //             that says no, by transcribing its first seconds. Either one wakes it.
+  // --wake stt: the transcript check alone.
+  // --wake kws: the keyword model alone, always on, and the audio is cut where it fired.
+  // Whichever it is, only what follows the phrase is answered, the audio never leaves this
+  // process, and speech that does not open with the phrase is dropped unprinted.
+  const std::string wake_mode = p.options.get("wake", "both");
+  const bool use_spotter = wake_mode == "kws", either = wake_mode == "both";
   const std::string play_command = p.options.get("play-cmd", "aplay -q -t raw -f S16_LE -c 1 -r {rate} -");
 
   p.stt();
   p.voice("en");
   p.voice("ur");
   Vad& vad = p.vad();
-  if (use_spotter) p.wake();
+  if (use_spotter || either) p.wake();
   Capture mic(p.options.get("capture-cmd", "arecord -q -t raw -f S16_LE -r 16000 -c 1 -"));
   std::printf("listening (%s). Say \"Hey Mio\", then a request. Ctrl-C to stop.\n",
-              use_spotter ? "keyword spotter" : "wake phrase by transcript");
+              use_spotter ? "keyword spotter" : either ? "keyword spotter or transcript" : "wake phrase by transcript");
   std::fflush(stdout);
 
   bool armed = false, muted = false;  // armed: the wake phrase was said alone, the request follows
@@ -631,7 +689,7 @@ int listen(Pipeline& p) {
     if (need_spotter) {
       if (!speech->empty()) request = plain(p, *speech);
     } else {
-      woke = opens_with_wake(p, *speech);
+      woke = (either && spot(p.wake(), *speech)) || opens_with_wake(p, *speech);
       if (!woke && !armed) continue;  // ordinary speech with no wake phrase: dropped, never printed
       if (woke) std::printf("\n[wake]\n");
       request = woke ? after_wake_phrase(p, *speech) : plain(p, *speech);
@@ -693,8 +751,9 @@ int main(int argc, char** argv) {
                "       mio_voice say    --text \"...\" --out file.wav [--lang en|ur]\n"
                "       mio_voice eval   [--manifest file] [--audio dir] [--split dev|test] [--out results.tsv]\n"
                "                        | --background long.wav | --reminders corpus/reminders.tsv\n"
-               "       mio_voice listen [--wake kws|stt] [--no-speak]\n"
+               "       mio_voice listen [--wake both|kws|stt] [--no-speak]\n"
                "common: --whisper base|small  --audio-ctx N  --llm file.gguf|none  --threads N  --match-threshold X\n"
+               "        --wake both|stt|kws  --lead-in S\n"
                "        --home DIR  --config DIR      (see README.md)\n");
   return command.empty() ? 1 : 2;
 }

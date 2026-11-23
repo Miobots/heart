@@ -79,6 +79,14 @@ int main() {
   CHECK_EQ(strip_wake(tables, "my glasses", 2), "my glasses");
   CHECK(wake_length(tables, split_words("hey mio")) == 2);
   CHECK(wake_length(tables, split_words("hello there")) == 0);
+  // How a person's "Hey Mio" really comes out of the recogniser (VOICE_EVAL section 3)...
+  CHECK_EQ(strip_wake(tables, "amio where are you"), "where are you");
+  CHECK(wake_length(tables, split_words("a hemio stop")) == 2);
+  CHECK(wake_length(tables, split_words("hey miu go to the kitchen")) == 2);
+  // ...and the mishearings left out on purpose, because ordinary speech opens with them.
+  CHECK(wake_length(tables, split_words("and my glasses")) == 0);
+  CHECK(wake_length(tables, split_words("hey my friend")) == 0);
+  CHECK(wake_length(tables, split_words("i am going out")) == 0);
 
   // ---- deterministic: a template, no model ----
   Reply r = say("Hey Mio, what is your battery level?");

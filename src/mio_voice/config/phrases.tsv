@@ -24,6 +24,16 @@ wake	wake	-	en	ok mio
 wake	wake	-	en	mio
 wake	wake	-	en	meo
 wake	wake	-	en	miyo
+# How the first speaker's "Hey Mio" actually came out of the recogniser, on the dev half of the
+# corpus only: "Amio" 19 times in 81. Not added, though just as common: "and my", "hey my",
+# "I am" and "Emil" — ordinary speech opens with those, and the keyword model catches most of
+# those clips anyway.
+wake	wake	-	en	amio
+wake	wake	-	en	emio
+wake	wake	-	en	emiu
+wake	wake	-	en	emiyo
+wake	wake	-	en	hey miu
+wake	wake	-	en	a hemio
 wake	wake	-	ur	ہے میو
 wake	wake	-	ur	ہیمیو
 wake	wake	-	ur	حیمیو
@@ -157,6 +167,8 @@ grammar	mute	-	ur	خاموش
 grammar	mute	-	ur	چپ ہو جاؤ
 grammar	mute	-	ur	چپ کرو
 grammar	mute	-	ur	میوٹ ہو جاؤ
+# "چپ ہو جاؤ" as the recogniser wrote it when it took the speech for English (dev half, speaker 1).
+grammar	mute	-	mixed	juppojo
 grammar	unmute	-	en	unmute
 grammar	unmute	-	en	unmute yourself
 grammar	unmute	-	en	you can talk now
@@ -260,6 +272,8 @@ grammar	sleep	-	ur	سو جاؤ
 grammar	sleep	-	ur	اب سو جاؤ
 grammar	sleep	-	ur	شب بخیر
 grammar	sleep	-	ur	سلیپ ہو جاؤ
+# "شب بخیر", likewise.
+grammar	sleep	-	mixed	shabbaqer
 ask	when	-	en	when
 ask	when	-	en	what time did
 ask	when	-	en	how long ago

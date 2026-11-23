@@ -153,8 +153,10 @@ Pick baseline_pick(const Tables& tables, const std::string& normalized,
 
 struct RouteOptions {
   /// Largest edit distance, as a fraction of the longer string, at which an utterance still counts
-  /// as a phrase from the closed list. Calibrated on recordings, not assumed.
-  double match_threshold = 0.25;
+  /// as a phrase from the closed list. Calibrated on recordings, not assumed: on the first
+  /// speaker's dev half 0.25 answered 38 of 46 listed requests and 0.30 answered 40, both with no
+  /// unlisted request taken as listed; 0.35 let one through (VOICE_EVAL section 3).
+  double match_threshold = 0.30;
   /// For the "repeat" command.
   const Reply* last = nullptr;
 };

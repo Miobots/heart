@@ -137,6 +137,10 @@ std::string Stt::opening(const std::vector<float>& pcm) {
   params.single_segment = true;
   params.no_timestamps = true;
   params.suppress_nst = true;
+  // The phrase is the first two or three words. Left uncapped the decoder runs on, repeating
+  // itself to fill the window, and a check meant to take a third of a second took several: on
+  // recordings of a person it was most of the 7-17 s before a reply (VOICE_EVAL section 3).
+  params.max_tokens = 8;
   params.print_progress = false;
   params.print_realtime = false;
   params.print_timestamps = false;
@@ -265,7 +269,8 @@ namespace {
 constexpr int kVadWindow = 512;
 }
 
-Vad::Vad(const std::string& model_path, float min_silence_s) {
+Vad::Vad(const std::string& model_path, float min_silence_s, double lead_in_s)
+    : lead_in_(static_cast<size_t>(std::max(0.0, lead_in_s) * kSampleRate)) {
   SherpaOnnxVadModelConfig config;
   std::memset(&config, 0, sizeof config);
   config.silero_vad.model = model_path.c_str();
@@ -284,6 +289,12 @@ Vad::Vad(const std::string& model_path, float min_silence_s) {
 Vad::~Vad() { SherpaOnnxDestroyVoiceActivityDetector(vad_); }
 
 void Vad::feed(const float* samples, int n) {
+  recent_.insert(recent_.end(), samples, samples + n);
+  if (recent_.size() > static_cast<size_t>(kSampleRate) * 40) {  // a stretch is at most 12 s: keep 20
+    const size_t drop = recent_.size() - static_cast<size_t>(kSampleRate) * 20;
+    recent_.erase(recent_.begin(), recent_.begin() + static_cast<std::ptrdiff_t>(drop));
+    recent_start_ += drop;
+  }
   pending_.insert(pending_.end(), samples, samples + n);
   size_t used = 0;
   for (; used + kVadWindow <= pending_.size(); used += kVadWindow) {
@@ -298,14 +309,25 @@ std::optional<std::vector<float>> Vad::pop() {
   if (SherpaOnnxVoiceActivityDetectorEmpty(vad_)) return std::nullopt;
   const SherpaOnnxSpeechSegment* segment = SherpaOnnxVoiceActivityDetectorFront(vad_);
   std::vector<float> samples(segment->samples, segment->samples + segment->n);
+  const size_t onset = static_cast<size_t>(std::max(0, segment->start));
   SherpaOnnxDestroySpeechSegment(segment);
   SherpaOnnxVoiceActivityDetectorPop(vad_);
+
+  // In front of it goes what the microphone heard just before (kLeadIn).
+  const size_t end = std::min(onset, recent_start_ + recent_.size());
+  const size_t begin = std::min(end, std::max(recent_start_, onset - std::min(onset, lead_in_)));
+  samples.insert(samples.begin(), recent_.begin() + static_cast<std::ptrdiff_t>(begin - recent_start_),
+                 recent_.begin() + static_cast<std::ptrdiff_t>(end - recent_start_));
+  last_lead_ = end - begin;
+  last_start_ = onset - last_lead_;
   return samples;
 }
 
 void Vad::reset() {
   SherpaOnnxVoiceActivityDetectorReset(vad_);
   pending_.clear();
+  recent_.clear();
+  recent_start_ = 0;
 }
 
 // ---- speech synthesis -------------------------------------------------------------------------
