@@ -35,7 +35,7 @@ network. See "Proving it is offline" below.
 | Part | Engine | Where |
 |---|---|---|
 | Speech to text | whisper.cpp v1.9.5, compiled in, CPU only | `Stt` in `src/engines.cpp` |
-| Wake phrase | either the first 2.5 s of a stretch of speech, transcribed as English, opens with it (`--wake stt`, the default), or sherpa-onnx's keyword spotter fires (`--wake kws`, `config/keywords.txt`) | `opens_with_wake`, `after_wake` in `src/main.cpp` |
+| Wake phrase | sherpa-onnx's keyword spotter fires on a stretch of speech (`config/keywords.txt`), **or** its first 2.5 s, transcribed as English, opens with the phrase. Either one wakes it (`--wake both`, the default); `--wake kws` and `--wake stt` use one alone | `spot`, `opens_with_wake` in `src/main.cpp` |
 | End of speech | Silero VAD, through sherpa-onnx | `Vad` |
 | Speech out | Piper voices `ur_PK-fasih-medium` and `en_US-lessac-medium`, on the sherpa-onnx runtime | `Tts` |
 | Language model | a ~1B GGUF model run by llama.cpp's `llama-completion`, **one child process per request** — loads, answers, unloads (HEART_DECISIONS §5) | `LanguageModel` |
@@ -49,13 +49,21 @@ network. See "Proving it is offline" below.
 
 1. Speech that does not open with the wake phrase is dropped — never transcribed in full, never
    printed.
-2. The request's language is judged on the audio **after the first 0.9 s**. Judged from the start,
-   "Hey Mio" followed by Urdu is called English and transcribed as nonsense.
-3. Only two answers are allowed, English or Urdu. Left alone the detector often hears Urdu as Hindi
+2. Every stretch of speech comes with **the 0.4 s the microphone heard just before it**
+   (`--lead-in`). Handed speech from its very first sample, the keyword spotter fired on 6
+   recordings of a person in 81; with that lead-in, on 65. The recogniser does better with it too.
+   It has to be what the room really sounded like: zeros in front do not work.
+3. The request's language is judged on the audio **after the first 0.9 s** of the stretch, which is
+   about half a second into the speech. Judged from the start, "Hey Mio" followed by Urdu is called
+   English and transcribed as nonsense; judged only after the whole phrase, a short command leaves
+   too little to judge.
+4. Only two answers are allowed, English or Urdu. Left alone the detector often hears Urdu as Hindi
    and writes Devanagari; Hindi counts as Urdu.
-4. The wake phrase is stripped from the transcript, using the spellings in the `wake` rows of
-   `config/phrases.tsv`.
-5. "Hey Mio" on its own arms the pipeline: the next thing said within 6 s is the request.
+5. The wake phrase is stripped from the transcript, using the spellings in the `wake` rows of
+   `config/phrases.tsv` — from the text, not the audio: cutting the audio where the spotter fired
+   took the first word of the request with it often enough to halve the answers that came out
+   right.
+6. "Hey Mio" on its own arms the pipeline: the next thing said within 6 s is the request.
 
 ## Build
 
@@ -96,6 +104,7 @@ The numbers come from **real recordings**, never from synthetic speech.
 $mio eval --audio corpus/audio/jalal --split test --out results.tsv
 $mio eval --audio corpus/audio/jalal --split test --wake kws    # the same, waking by the spotter
 $mio eval --background household.wav           # false wake-ups per hour on speech with no wake phrase
+./scripts/replay.sh a.wav b.wav                # recordings into `listen`, at the speed a microphone gives them
 $mio eval --split test                         # routing and the model on the reference text alone
 $mio eval --reminders corpus/reminders.tsv     # reminder slots from text (measured only)
 ```
@@ -106,15 +115,21 @@ them). `eval` prints word error rate by language, closed-list accuracy and false
 detection, how the model did against a no-model baseline, how many model processes were started
 when nothing was retrieved (must be 0), and time from end of speech to reply by stage.
 
+`eval` cuts each recording to where its speech starts before doing anything else, because that is
+what `listen` is handed. Scored whole — a second of quiet room, then speech — the same recordings
+gave numbers `listen` could not reproduce. `scripts/replay.sh` is the check on that: it is the only
+thing here that feeds `listen` a stream.
+
 Recordings are gitignored (`corpus/audio/`): they are people's voices.
 
 `scripts/synth.sh` builds a synthetic copy of the corpus with the pipeline's own voices. It is a
 smoke test for the audio path, **not a measurement** — one clean synthetic speaker says nothing
 about how the pipeline does on people.
 
-Useful switches: `--whisper base|small`, `--audio-ctx N` (shorter encoder window: faster, less
-accurate), `--llm <file.gguf>|none` (`none` = the no-model baseline), `--match-threshold X`,
-`--wake stt|kws`, `--threads N`.
+Useful switches: `--whisper base|small`, `--audio-ctx N` (the encoder window in 20 ms frames;
+768, which is 15 s, by default — the model's own 30 s is `1500`), `--llm <file.gguf>|none` (`none`
+= the no-model baseline), `--match-threshold X` (0.30 by default), `--wake both|stt|kws`,
+`--lead-in S` (0.4 by default), `--threads N`.
 
 ## Proving it is offline
 
@@ -135,8 +150,15 @@ Everything likely to need tuning is a table, not code:
   recogniser hears slightly differently needs a row, not a code change.
 - `config/replies.tsv` — every sentence it can say, in both languages.
 - `config/keywords.txt` — the spotter's spellings of "Hey Mio" and "Mio", each with its own boost
-  (`:`) and threshold (`#`). "Mio" alone carries the higher threshold (HEART_DECISIONS 27).
+  (`:`) and threshold (`#`). "Mio" alone carries the higher threshold (HEART_DECISIONS 27). The
+  "Hey Mio" lines were set on one person's recordings: at the threshold the model's authors use,
+  0.15, the spotter fired on 1 clip in 81; at 0.0003 with the boost at 10 it fires on 65, and lower
+  than that gains nothing. **A lower threshold also wakes more often when nobody called** — measure
+  that with `eval --background` before trusting a number here.
 - `--match-threshold` — how far from a listed phrase still counts as that phrase.
+
+Tune on the `dev` half and nothing else. What each of these was set to, on what evidence, and what
+was tried and thrown away, is in the vault's `VOICE_EVAL.md`, section 3b.
 
 ## Not here (H4.1–H4.4)
 

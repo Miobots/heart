@@ -143,9 +143,12 @@ and everything after. `mio_bringup` has no launch files yet.
 
 **`H4.0` is built but not finished.** `src/mio_voice` is the offline voice pipeline running
 standalone on a laptop — wake phrase, whisper.cpp, the four stages, a ~1B model as a child process,
-Piper voices — with its tests passing and the whole chain running with the network removed. **It has
-not been measured on a human voice**, and the task is not done until it has: the corpus in
-`src/mio_voice/corpus/manifest.tsv` still has to be recorded. See the vault's `VOICE_EVAL.md`.
+Piper voices — with its tests passing and the whole chain running with the network removed. One
+person has recorded the corpus and it has been tuned on half of it: on the other half it wakes on
+78 of 82 clips and answers 53 of them correctly, a listed command in about 4 s. **Not done:** how
+often it wakes when nobody called it is unmeasured, there is no second speaker, nobody has spoken
+to it through a live microphone, and a third of listed requests are still heard wrongly. See the
+vault's `VOICE_EVAL.md`.
 
 The order, strictly: URDF → Gazebo spawn → manual driving → odometry → LiDAR → SLAM mapping →
 AMCL → Nav2 goals → obstacle avoidance → safety supervisor → exploration → gateway → outbox →

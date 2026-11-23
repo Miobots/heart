@@ -71,6 +71,8 @@ ctest --test-dir ~/.cache/mio_voice/build
 ~/.cache/mio_voice/build/mio_voice listen
 ```
 
-`H4.0` is built but **not measured on a human voice yet**; `src/mio_voice/corpus/manifest.tsv` still
-has to be recorded. The build-order chain's "voice" means voice on the robot (`H4.1`–`H4.4`); `H4.0`
-is a laptop program outside it (HEART_DECISIONS 42).
+`H4.0` is built and measured on **one** person's recordings: tuned on half, it wakes on 78 of 82
+clips of the other half and answers 53 correctly, a listed command in about 4 s. **Not done:** the
+false-wake rate is unmeasured, there is no second speaker, nobody has spoken to it through a live
+microphone, and a third of listed requests are still heard wrongly (the vault's `VOICE_EVAL.md`). The build-order chain's "voice" means voice on the robot
+(`H4.1`–`H4.4`); `H4.0` is a laptop program outside it (HEART_DECISIONS 42).

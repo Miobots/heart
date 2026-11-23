@@ -5,6 +5,53 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-11-23 — H4.0: it wakes for a person now, and answers in seconds
+
+One speaker recorded the 163-clip corpus. The first pass over it found that `mio_voice` woke on 18
+of the 82 held-out clips and took about 14 s to answer. Tuned on the other half only, it now wakes
+on 78 and answers a listed command in 4 s; 53 of the 82 get the right answer, where 15 did.
+
+**Found:** the wake check had no limit on how much it wrote. It is meant to read the first two or
+three words; instead the decoder ran on, repeating itself to fill its window, and a check costed at
+a third of a second took several. Capped at eight tokens.
+
+**Found:** the keyword spotter's threshold, 0.15, was right for the synthetic voice and useless for
+a person: 1 clip in 81. At 0.0003 with a higher boost and nine more spellings it fires on 65.
+
+**Found, late, by replaying recordings into `listen`:** `eval` was scoring something `listen`
+never hears. A recording has a second of quiet room before the speech; a live stretch of speech
+starts on its first sound. Cut that way the spotter fired on 6 clips in 81, not 63, and the
+recogniser got 36 of 46 listed requests where it had got 40. Every stretch now comes with the
+0.4 s the microphone heard before it (`kLeadIn`, `--lead-in`) — real audio, because zeros in front
+do not work — and `eval` cuts each recording the way `listen` would. `scripts/replay.sh` is the
+check that found it.
+
+**Found:** this speaker's "Hey Mio" reaches the recogniser as "Amio" — 19 times in 81 — and as
+"Emio", "Hey Miu", "And my", "Hey my", "Emil". Six spellings were added; the ones ordinary speech
+also opens with were not.
+
+**Decided:** either detector wakes it (`--wake both`, the default). They miss different clips.
+
+**Decided:** the phrase is removed from the transcript, never cut from the audio. The spotter's
+"it ended here" is late often enough to take the first word of the request: 23 of 46 listed
+requests right when cut, 38 when stripped.
+
+**Decided:** the speech model's window is 15 s, not 30. A stretch of speech is at most 12 s, and on
+recordings the shorter window was no less accurate and twice as fast. The closed-list match is
+0.30, from 0.25: two more listed requests answered, none let in that should not be.
+
+**Rejected:** giving the recogniser the spelling as a hint. It looked like the best result of the
+day until the leading silence was trimmed from the recordings; then it fell from 63 to 5, because
+with the hint the recogniser treats the phrase as already said and skips it.
+
+**Not done, and it matters more now:** how often it wakes when nobody called it. Both detectors
+were loosened, and these recordings cannot answer it — every one contains the phrase. A third of
+listed requests are still heard wrongly. One voice, one microphone, and nobody has yet spoken to
+`listen` live. The held-out half was run twice, once before the scoring was corrected; both runs
+are in the vault's `VOICE_EVAL.md`.
+
+---
+
 ## 2026-11-18 — H3.1: the gateway dials the Brain and drives the simulated robot
 
 `src/mio_gateway` is no longer a scaffold. It dials the Brain over WebSocket, says hello, and turns
