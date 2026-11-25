@@ -13,6 +13,9 @@
   <!-- IMU Sensor -->
   <xacro:include filename="sensors/imu.xacro"/>
 
+  <!-- Face camera -->
+  <xacro:include filename="sensors/camera.xacro"/>
+
   <!-- Gazebo Jetty (gz-sim 10) Physics & Plugins -->
   <xacro:include filename="mio_gazebo.xacro"/>
 

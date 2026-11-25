@@ -5,6 +5,42 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-11-25 — A face camera, and a whole house to drive in
+
+The robot has a forward camera (`mio_description/urdf/sensors/camera.xacro`: 640×480, 15 Hz, ~70°,
+under the LiDAR's scan plane, tilted up 0.2 rad), bridged to `/camera/image_raw` and
+`/camera/camera_info` in `camera_optical_frame`. Its numbers are placeholders until the camera is
+chosen (HARDWARE.md C3). RViz's `sim.rviz` shows it in a Camera panel.
+
+`world:=small_house` is AWS RoboMaker's Small House (MIT-0): bedroom, living room, dining, kitchen,
+87 pieces of furniture. The models are fetched by `sim-assets.repos` into `sim_assets/` (gitignored,
+~82 MB) and installed by `mio_sim`; the world file is ours. `world` now takes a name, not a path
+(`home_arena` stays the default, so every existing run and the saved map are unchanged). `build.sh`
+builds only `src/`, so the house's Gazebo Classic package is never built.
+
+```bash
+mkdir -p sim_assets && vcs import sim_assets < sim-assets.repos && ./build.sh
+ros2 launch mio_sim sim_rviz.launch.py world:=small_house     # Gazebo 3D window + RViz with the camera
+```
+
+Measured headless, small_house: real-time factor 1.00, camera 14.8 Hz, LiDAR 9.2–9.7 Hz, Gazebo
+~360 MB; 0.3 m/s for ~2 s drove `/odom` to x = 0.63.
+
+**Found:** upstream's world loads in Gazebo Classic only. gz-sim 10 refused it for invalid inertia
+(46 models give a mass with no inertia; the shoe rack lists `ixx` twice and `izz` never), so
+`mio_sim` drops those blocks when installing (every piece is static). And gz-sim does not pass a
+wrapping model's `<static>` down to the model it includes, so the furniture was loose and the house
+ran at 0.4× real time; the world now includes each piece as static.
+
+**Found:** on this hybrid laptop Gazebo rendered on the Intel iGPU, and the LiDAR fell to ~8.4 Hz in
+the house. `sim.launch.py` now renders on the NVIDIA GPU when its EGL vendor file exists.
+
+**Not done:** no map of the house yet, so Nav2 still runs only in `home_arena`. The camera renders in
+every world, including the headless proofs — one more load on a machine that H3.3 found can fall
+behind.
+
+---
+
 ## 2026-11-23 — H3.3: the outbox, proven in Gazebo across an outage
 
 `src/mio_gateway/scripts/outbox_proof.sh` runs the whole thing headless and checks it: Gazebo, Nav2,

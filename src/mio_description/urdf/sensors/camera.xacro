@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ========================================== -->
+  <!-- Face camera (forward, below the LiDAR)     -->
+  <!-- ========================================== -->
+  <!-- Placeholder numbers until the camera is chosen (HARDWARE.md C3 is flagged): a typical
+       ~70 deg webcam / Pi Camera Module 3 field of view, 640x480 at 15 Hz. Measure and replace
+       them when the real one is mounted. It sits on the front of the chassis, under the LiDAR's
+       scan plane so it never blocks the scan, and tilts up a little so a table top is in frame
+       from a robot this short. -->
+  <xacro:property name="camera_x" value="0.115"/>
+  <xacro:property name="camera_z" value="0.13"/>
+  <xacro:property name="camera_pitch" value="-0.2"/>  <!-- negative = looks up -->
+  <xacro:property name="camera_hfov" value="1.2217"/>  <!-- 70 deg -->
+
+  <link name="camera_link">
+    <visual>
+      <geometry>
+        <box size="0.015 0.04 0.02"/>
+      </geometry>
+      <material name="sensor_black"/>
+    </visual>
+    <inertial>
+      <mass value="0.01"/>
+      <inertia ixx="0.000001" ixy="0.0" ixz="0.0"
+               iyy="0.000001" iyz="0.0"
+               izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="${camera_x} 0 ${camera_z}" rpy="0 ${camera_pitch} 0"/>
+  </joint>
+
+  <!-- Images are in the optical frame (z forward, x right, y down), which is what every image
+       consumer expects; camera_link stays x-forward like the rest of the robot. -->
+  <link name="camera_optical_frame"/>
+
+  <joint name="camera_optical_joint" type="fixed">
+    <parent link="camera_link"/>
+    <child link="camera_optical_frame"/>
+    <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+  </joint>
+
+  <!-- Gazebo Jetty (gz-sim 10) camera sensor. A gz camera looks along its link's +x. -->
+  <gazebo reference="camera_link">
+    <sensor name="camera" type="camera">
+      <gz_frame_id>camera_optical_frame</gz_frame_id>
+      <topic>/model/mio/camera/image</topic>
+      <update_rate>15</update_rate>
+      <camera>
+        <camera_info_topic>/model/mio/camera/camera_info</camera_info_topic>
+        <horizontal_fov>${camera_hfov}</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.05</near>
+          <far>15.0</far>
+        </clip>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.007</stddev>
+        </noise>
+      </camera>
+      <always_on>1</always_on>
+      <visualize>true</visualize>
+    </sensor>
+  </gazebo>
+
+</robot>

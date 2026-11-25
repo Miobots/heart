@@ -16,3 +16,6 @@ src/slam_toolbox/
 # Local personal study guides (not committed)
 TEACHER.md
 teacher.md
+
+# Simulation assets, tracked by sim-assets.repos — restore with `mkdir -p sim_assets && vcs import sim_assets < sim-assets.repos`.
+sim_assets/

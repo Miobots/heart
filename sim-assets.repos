@@ -1,0 +1,8 @@
+# Third-party simulation assets. Sim only — never needed on the Pi.
+# Restore with: mkdir -p sim_assets && vcs import sim_assets < sim-assets.repos && ./build.sh
+# mio_sim installs the house's models from here; its world file is our own (worlds/small_house.sdf).
+repositories:
+  aws-robomaker-small-house-world:
+    type: git
+    url: https://github.com/aws-robotics/aws-robomaker-small-house-world.git
+    version: ff9631ca6d1db9c1ba656498151464b5ab74aafe
