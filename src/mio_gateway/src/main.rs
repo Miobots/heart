@@ -17,9 +17,11 @@ use rclrs::*;
 use ros_env::diagnostic_msgs::msg::{DiagnosticArray, DiagnosticStatus};
 use ros_env::geometry_msgs::msg::PoseWithCovarianceStamped;
 use ros_env::nav2_msgs::action::{NavigateToPose, NavigateToPose_Goal};
+use ros_env::std_msgs::msg::String as Text;
 use std::collections::HashMap;
+use std::future::Future;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::Message;
@@ -89,11 +91,31 @@ fn regions(path: &str, logger: &Logger) -> HashMap<String, Pose> {
 
 /// Where events wait for the Brain: the robot's state, apart from the source and the build.
 fn default_outbox_dir() -> String {
+    state_path("mio_gateway/outbox")
+}
+
+fn state_path(name: &str) -> String {
     std::env::var("XDG_STATE_HOME")
         .map(PathBuf::from)
         .or_else(|_| std::env::var("HOME").map(|home| PathBuf::from(home).join(".local/state")))
-        .map(|base| base.join("mio_gateway/outbox").display().to_string())
+        .map(|base| base.join(name).display().to_string())
         .unwrap_or_default()
+}
+
+/// Where the robot keeps its copy of the next 72 h of reminders (`schedule_file`), set once at start.
+static SCHEDULE_FILE: OnceLock<PathBuf> = OnceLock::new();
+
+/// Written whole and renamed into place, so power lost mid-write leaves the last schedule, not half.
+fn save_schedule(state: &serde_json::Value) -> std::io::Result<()> {
+    let Some(path) = SCHEDULE_FILE.get() else {
+        return Ok(());
+    };
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, state.to_string())?;
+    std::fs::rename(tmp, path)
 }
 
 /// Keeps the files in step with the session. A disk that fails costs durability, not the link:
@@ -122,6 +144,14 @@ fn keep(outbox: &mut Option<Outbox>, out: &Out, logger: &Logger) {
                 if let Some(Err(e)) = outbox.as_mut().map(|disk| disk.remove(id)) {
                     log_warn!(logger, "could not delete confirmed event {id}: {e}");
                 }
+            }
+        }
+        Out::Schedule(state) => {
+            if let Err(e) = save_schedule(state) {
+                log_error!(
+                    logger,
+                    "the reminder schedule is not on disk, so a restart would lose it: {e}"
+                );
             }
         }
         _ => {}
@@ -155,6 +185,11 @@ fn main() -> Result<(), RclrsError> {
         .default(default_outbox_dir().into())
         .read_only()?
         .get();
+    let schedule_file: Arc<str> = node
+        .declare_parameter("schedule_file")
+        .default(state_path("mio_gateway/schedule.json").into())
+        .read_only()?
+        .get();
     log_info!(
         &logger,
         "dialling {url} as {device_id}, with {} named place(s)",
@@ -166,6 +201,16 @@ fn main() -> Result<(), RclrsError> {
 
     // ---- the link half ------------------------------------------------------------------------
     let mut session = Session::new(&device_id, &token, places);
+    // The reminders this robot was holding when it stopped: it fires them with or without a Brain.
+    let _ = SCHEDULE_FILE.set(PathBuf::from(&*schedule_file));
+    match std::fs::read(&*schedule_file).map(|bytes| serde_json::from_slice(&bytes)) {
+        Ok(Ok(saved)) => {
+            session.restore_schedule(&saved);
+            log_info!(&logger, "reminders restored from {schedule_file}");
+        }
+        Ok(Err(e)) => log_warn!(&logger, "unreadable schedule at {schedule_file}: {e}"),
+        Err(_) => log_info!(&logger, "no saved reminders at {schedule_file} yet"),
+    }
     let outbox = match Outbox::open(&*outbox_dir) {
         Ok(opened) => {
             for bad in &opened.unreadable {
@@ -258,6 +303,10 @@ fn main() -> Result<(), RclrsError> {
         },
     )?;
 
+    // A reminder said aloud. The voice node speaks what arrives here; until it is on the robot the
+    // log is the only one listening.
+    let say = node.create_publisher::<Text>("mio/say")?;
+    let say_logger = logger.clone();
     let (tx, commands) = (to_link, executor.commands().clone());
     // `run` keeps going whether or not the promise is kept; the names are only to say so.
     let _robot = executor.commands().run(async move {
@@ -325,6 +374,12 @@ fn main() -> Result<(), RclrsError> {
                         let _ = cancellation.cancel().await;
                     }
                 }
+                Robot::Say { text } => {
+                    log_info!(&say_logger, "reminder: \"{text}\"");
+                    if let Err(e) = say.publish(Text { data: text }) {
+                        log_error!(&say_logger, "could not publish on /mio/say: {e}");
+                    }
+                }
             }
         }
     });
@@ -368,7 +423,18 @@ async fn link(
 ) {
     let mut wait = Duration::from_secs(1);
     loop {
-        match tokio_tungstenite::connect_async(url.as_str()).await {
+        let dial = tokio_tungstenite::connect_async(url.as_str());
+        let dialled = offline(
+            dial,
+            &mut session,
+            &mut outbox,
+            start,
+            &to_robot,
+            &mut from_robot,
+            &logger,
+        )
+        .await;
+        match dialled {
             Err(e) => log_warn!(&logger, "the Brain is not reachable at {url}: {e}"),
             Ok((socket, _)) => {
                 let why = talk(
@@ -391,18 +457,46 @@ async fn link(
         // Somewhere in [0.5, 1.5) of the wait. A ULID's random half is randomness already here.
         let jitter = 0.5 + (ulid::Ulid::new().random() % 1000) as f64 / 1000.0;
         let pause = tokio::time::sleep(wait.mul_f64(jitter));
-        tokio::pin!(pause);
         wait = (wait.mul_f64(1.5)).min(Duration::from_secs(10));
-        // The robot does not stop for an outage. What it says while the link is down still changes
-        // what is known, and an event — a goal that ends, a fault — goes on disk for the next one.
-        loop {
-            tokio::select! {
-                _ = &mut pause => break,
-                Some(event) = from_robot.recv() => {
-                    for out in heard(&mut session, event, now(start)) {
-                        keep(&mut outbox, &out, &logger);
-                    }
+        offline(
+            pause,
+            &mut session,
+            &mut outbox,
+            start,
+            &to_robot,
+            &mut from_robot,
+            &logger,
+        )
+        .await;
+    }
+}
+
+/// Waits for `until` with no link. The robot does not stop for an outage: what it says still
+/// changes what is known, an event — a goal that ends, a fault, a reminder announced — goes on disk
+/// for the next link, and its own clock keeps firing reminders, even while a dial hangs.
+async fn offline<F: Future>(
+    until: F,
+    session: &mut Session,
+    outbox: &mut Option<Outbox>,
+    start: Instant,
+    to_robot: &UnboundedSender<Robot>,
+    from_robot: &mut UnboundedReceiver<FromRobot>,
+    logger: &Logger,
+) -> F::Output {
+    tokio::pin!(until);
+    let mut every_second = tokio::time::interval(Duration::from_secs(1));
+    loop {
+        let outs = tokio::select! {
+            done = &mut until => return done,
+            _ = every_second.tick() => session.clock(now(start)),
+            Some(event) = from_robot.recv() => heard(session, event, now(start)),
+        };
+        for out in outs {
+            match out {
+                Out::Robot(command) => {
+                    let _ = to_robot.send(command);
                 }
+                out => keep(outbox, &out, logger),
             }
         }
     }
@@ -437,7 +531,11 @@ where
                 Some(Ok(_)) => continue,
                 Some(Err(e)) => return format!("socket error: {e}"),
             },
-            _ = every_second.tick() => session.tick(now(start)),
+            _ = every_second.tick() => {
+                let mut outs = session.tick(now(start));
+                outs.extend(session.clock(now(start)));
+                outs
+            }
             Some(event) = from_robot.recv() => heard(session, event, now(start)),
         };
         if session.welcomed() && !welcomed {
@@ -459,7 +557,9 @@ where
                     return why;
                 }
                 // Before the Send of the same event: on disk before it is on the wire.
-                out @ (Out::Store(_) | Out::Forget { .. }) => keep(outbox, &out, logger),
+                out @ (Out::Store(_) | Out::Forget { .. } | Out::Schedule(_)) => {
+                    keep(outbox, &out, logger)
+                }
             }
         }
     }
