@@ -18,7 +18,9 @@ set -eo pipefail
 # must not be active while it is sourced or the build dies before colcon is ever reached.
 source /opt/ros/lyrical/setup.bash
 set -u
-exec colcon build \
+# --base-paths src: third-party sim assets in sim_assets/ carry a Gazebo Classic package.xml that
+# must not be built, only installed by mio_sim.
+exec colcon build --base-paths src \
   --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3 -DPYTHON_EXECUTABLE=/usr/bin/python3 \
                -DCMAKE_BUILD_TYPE=Release \
   "$@"

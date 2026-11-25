@@ -14,7 +14,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 
 # Sanitize Snap environment contamination if running from VS Code / terminal Snap
@@ -38,9 +38,17 @@ def generate_launch_description():
     pkg_mio_nav = get_package_share_directory('mio_nav')
     pkg_nav2_bringup = get_package_share_directory('nav2_bringup')
 
+    # The world the robot is in picks its saved map and named places; map:= / regions_file:= still
+    # override either. Must match the world sim.launch.py was started with.
+    world_arg = DeclareLaunchArgument(
+        'world',
+        default_value='home_arena',
+        description='Which saved map and named places: home_arena or small_house'
+    )
+    world = LaunchConfiguration('world')
     map_arg = DeclareLaunchArgument(
         'map',
-        default_value=os.path.join(pkg_mio_nav, 'maps', 'home_arena.yaml'),
+        default_value=PathJoinSubstitution([pkg_mio_nav, 'maps', [world, '.yaml']]),
         description='Full path to the saved map yaml'
     )
     params_arg = DeclareLaunchArgument(
@@ -67,7 +75,7 @@ def generate_launch_description():
     )
     regions_arg = DeclareLaunchArgument(
         'regions_file',
-        default_value=os.path.join(pkg_mio_nav, 'maps', 'home_arena.regions.json'),
+        default_value=PathJoinSubstitution([pkg_mio_nav, 'maps', [world, '.regions.json']]),
         description='Where the named places of this map are, for goals the Brain sends by name'
     )
 
@@ -107,6 +115,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        world_arg,
         map_arg,
         params_arg,
         use_sim_time_arg,

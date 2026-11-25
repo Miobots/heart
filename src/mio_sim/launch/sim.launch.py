@@ -1,10 +1,10 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, ExecuteProcess
+from launch.actions import AppendEnvironmentVariable, DeclareLaunchArgument, IncludeLaunchDescription, ExecuteProcess
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 
 # Sanitize Snap environment contamination if running from VS Code / terminal Snap
@@ -23,18 +23,25 @@ if 'XDG_DATA_DIRS' in os.environ:
         if '/snap/' not in p
     ])
 
+# Render on the NVIDIA GPU when there is one. On a hybrid laptop Gazebo otherwise renders the camera
+# and the GPU LiDAR on the integrated GPU, and in small_house the LiDAR then falls to ~8 Hz of its 10.
+NVIDIA_EGL = '/usr/share/glvnd/egl_vendor.d/10_nvidia.json'
+if os.path.exists(NVIDIA_EGL):
+    os.environ.setdefault('__NV_PRIME_RENDER_OFFLOAD', '1')
+    os.environ.setdefault('__GLX_VENDOR_LIBRARY_NAME', 'nvidia')
+    os.environ.setdefault('__EGL_VENDOR_LIBRARY_FILENAMES', NVIDIA_EGL)
+
 def generate_launch_description():
     pkg_mio_description = get_package_share_directory('mio_description')
     pkg_mio_sim = get_package_share_directory('mio_sim')
 
-    default_world_path = os.path.join(pkg_mio_sim, 'worlds', 'home_arena.sdf')
     default_bridge_config = os.path.join(pkg_mio_sim, 'config', 'ros_gz_bridge.yaml')
 
     # Launch Arguments
     world_arg = DeclareLaunchArgument(
         'world',
-        default_value=default_world_path,
-        description='Path to Gazebo world SDF file'
+        default_value='home_arena',
+        description='World in mio_sim/worlds, without .sdf: home_arena or small_house'
     )
 
     x_arg = DeclareLaunchArgument('x', default_value='0.0', description='Initial X position of robot')
@@ -48,7 +55,7 @@ def generate_launch_description():
         description='Run Gazebo headless without GUI if true'
     )
 
-    world = LaunchConfiguration('world')
+    world = PathJoinSubstitution([pkg_mio_sim, 'worlds', [LaunchConfiguration('world'), '.sdf']])
     x = LaunchConfiguration('x')
     y = LaunchConfiguration('y')
     z = LaunchConfiguration('z')
@@ -114,7 +121,12 @@ def generate_launch_description():
         parameters=[{'use_sim_time': True}],
     )
 
+    # model:// URIs (the small house's furniture, the obstacle box) resolve from mio_sim/models.
+    model_path = AppendEnvironmentVariable(
+        'GZ_SIM_RESOURCE_PATH', os.path.join(pkg_mio_sim, 'models'))
+
     return LaunchDescription([
+        model_path,
         world_arg,
         x_arg,
         y_arg,
