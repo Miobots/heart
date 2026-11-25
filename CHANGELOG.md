@@ -5,7 +5,7 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
-## 2026-11-25 — A face camera, and a whole house to drive in
+## 2026-11-25 — A face camera, a whole house to drive in, and its map
 
 The robot has a forward camera (`mio_description/urdf/sensors/camera.xacro`: 640×480, 15 Hz, ~70°,
 under the LiDAR's scan plane, tilted up 0.2 rad), bridged to `/camera/image_raw` and
@@ -35,9 +35,22 @@ ran at 0.4× real time; the world now includes each piece as static.
 **Found:** on this hybrid laptop Gazebo rendered on the Intel iGPU, and the LiDAR fell to ~8.4 Hz in
 the house. `sim.launch.py` now renders on the NVIDIA GPU when its EGL vendor file exists.
 
-**Not done:** no map of the house yet, so Nav2 still runs only in `home_arena`. The camera renders in
-every world, including the headless proofs — one more load on a machine that H3.3 found can fall
-behind.
+**The house is mapped** (`mio_nav/maps/small_house.{pgm,yaml}`, 18.75 × 11.2 m at 5 cm). Mapped
+with `mapping.launch.py` and Nav2's `navigation_launch.py` (no AMCL) driving the robot through 12
+stops in every room, planning into unknown space: all 12 succeeded, ~5 min. Its walls match the
+house's reference map to within 5 cm, so the map frame is the world frame and the robot's spawn at
+the origin is AMCL's initial pose, as for `home_arena`.
+
+`navigation.launch.py world:=small_house` picks that map and `small_house.regions.json` (kitchen,
+dining room, living room, bedroom, gym, front door — each checked to have 0.35 m clear on the map);
+`world` defaults to `home_arena`, and `map:=` / `regions_file:=` still override. With AMCL on the
+saved map, the robot reached all six places in turn (18–35 s each). At the front door AMCL put it
+0.24 m from where Gazebo had it — inside Nav2's 0.25 m goal tolerance, one sample, not yet measured
+properly.
+
+**Not done:** the camera renders in every world, including the headless proofs — one more load on a
+machine that H3.3 found can fall behind. Picture frames in the house render blank (upstream's
+texture paths point outside the package).
 
 ---
 
