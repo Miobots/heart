@@ -5,6 +5,28 @@ found to be wrong. See `HANDOFF.md` for the current state and the next step.
 
 ---
 
+## 2026-11-25 — The robot keeps and fires its own reminders (SIM.H1)
+
+`mio_gateway` takes `sched.window` — the next 72 h of reminders, already expanded by the Brain — and
+replaces whatever it held. It fires each occurrence on the robot's own wall clock, **connected or
+not**: the text goes out on `/mio/say` (`std_msgs/String`, for the voice node to speak) and a
+`sched.fired` event goes through the outbox like any other fact, stamped at the announcement. The
+window and what has fired are written to `schedule_file` (default
+`$XDG_STATE_HOME/mio_gateway/schedule.json`, written whole and renamed), so a restart neither forgets a
+reminder nor repeats one. A moment that passed while the robot was off is announced up to 15 min late
+and not after (`LATE_GRACE_MS`; a missed one is not reported yet — no topic for it). The manifest now
+says `reminders: available`.
+
+The logic is in `session.rs` (`clock()`, `restore_schedule()`); `main.rs` calls `clock()` every
+second, and `offline()` now keeps calling it while a dial hangs or the link is down.
+
+Run in Gazebo against Brain `feat/reminders` (vault STATUS has it): "remind me to check the oven in one
+minute" → window saved on the robot → Brain killed → `/mio/say` "Check the oven" 0.64 s after it was
+due, the firing waiting on disk → Brain back → recorded once, outbox empty → gateway restarted → the
+schedule restored and nothing announced again. `cargo test`: 28 + 3 conformance.
+
+**Not done:** nothing speaks `/mio/say` yet (`mio_voice`, H4.0 / PR #6); `voice.speak` is still refused.
+
 ## 2026-11-23 — H3.3: the outbox, proven in Gazebo across an outage
 
 `src/mio_gateway/scripts/outbox_proof.sh` runs the whole thing headless and checks it: Gazebo, Nav2,

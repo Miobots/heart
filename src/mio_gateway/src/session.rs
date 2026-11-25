@@ -26,6 +26,12 @@ pub const ANSWER_WITHIN: Duration = Duration::from_secs(5);
 /// Only coarse, infrequent messages cross (ENVELOPE §1): Nav2 reports progress at ~50 Hz, the
 /// Brain hears it once a second.
 pub const FEEDBACK_EVERY: Duration = Duration::from_secs(1);
+/// A reminder whose moment passed while the robot was off is still announced within this long of
+/// it, and not after: "take your medicine" two hours late is worse than not at all.
+/// ponytail: a missed occurrence is only logged, not reported; it needs a topic to say so.
+pub const LATE_GRACE_MS: u64 = 15 * 60 * 1000;
+/// What has fired is remembered this long, so a window sent again never announces it twice.
+pub const FIRED_KEEP_MS: u64 = 4 * 24 * 60 * 60 * 1000;
 /// Events waiting for the Brain to confirm them (H3.2). At the cap the oldest is dropped, loudly.
 /// ponytail: a count, not bytes. Events are a few hundred bytes, so 10 000 is a few MB of card and
 /// days of a robot with no link; pictures get their own byte cap at H7.2 (HEART_DECISIONS 46).
@@ -46,8 +52,17 @@ pub type Pose = (f64, f64, f64);
 /// What the gateway asks the robot to do. The only two things in v1.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Robot {
-    Goto { corr_id: String, pose: Pose },
-    Cancel { corr_id: String },
+    Goto {
+        corr_id: String,
+        pose: Pose,
+    },
+    Cancel {
+        corr_id: String,
+    },
+    /// Say this aloud: a reminder whose moment has come.
+    Say {
+        text: String,
+    },
 }
 
 /// What a step produces.
@@ -68,6 +83,37 @@ pub enum Out {
         msg_ids: Vec<String>,
         confirmed: bool,
     },
+    /// The robot's schedule changed: write it to disk, so a restart neither forgets a reminder nor
+    /// announces one twice. Its shape is what `restore_schedule` reads.
+    Schedule(Value),
+}
+
+/// One moment of one reminder, as the Brain sent it in `sched.window`.
+#[derive(Clone, Debug, PartialEq)]
+struct Occurrence {
+    id: String,
+    text: String,
+    due_ms: u64,
+}
+
+/// The occurrences of a `sched.window`, or `None` if any of them is malformed.
+fn occurrences(payload: &Value) -> Option<Vec<Occurrence>> {
+    payload["occurrences"]
+        .as_array()?
+        .iter()
+        .map(|o| {
+            Some(Occurrence {
+                id: o["occurrence_id"]
+                    .as_str()
+                    .filter(|s| !s.is_empty())?
+                    .to_owned(),
+                text: o["text"].as_str()?.to_owned(),
+                due_ms: o["due_time_ms"]
+                    .as_f64()
+                    .filter(|n| n.is_finite() && *n >= 0.0)? as u64,
+            })
+        })
+        .collect()
 }
 
 /// How a navigation goal ended, as the robot reports it.
@@ -132,6 +178,8 @@ pub struct Session {
     pose: Option<Pose>,    // the last place the robot reported being
     seen: HashMap<String, (Seen, Duration)>,
     outbox: VecDeque<Value>, // events the Brain has not confirmed, oldest first
+    schedule: Vec<Occurrence>, // the last sched.window: it replaces, it never merges
+    fired: HashMap<String, u64>, // occurrence id -> when it was due, for FIRED_KEEP_MS
 }
 
 impl Session {
@@ -156,7 +204,63 @@ impl Session {
             pose: None,
             seen: HashMap::new(),
             outbox: VecDeque::new(),
+            schedule: Vec::new(),
+            fired: HashMap::new(),
         }
+    }
+
+    /// The schedule a previous run wrote (`Out::Schedule`). Anything unreadable is skipped: the
+    /// Brain sends a fresh window on the next welcome.
+    pub fn restore_schedule(&mut self, saved: &Value) {
+        self.schedule = occurrences(saved).unwrap_or_default();
+        self.fired = saved["fired"]
+            .as_object()
+            .map(|fired| {
+                fired
+                    .iter()
+                    .filter_map(|(id, due)| Some((id.clone(), due.as_u64()?)))
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
+
+    fn schedule_state(&self) -> Out {
+        let occurrences: Vec<Value> = self
+            .schedule
+            .iter()
+            .map(|o| json!({ "occurrence_id": o.id, "text": o.text, "due_time_ms": o.due_ms }))
+            .collect();
+        Out::Schedule(json!({ "occurrences": occurrences, "fired": self.fired }))
+    }
+
+    /// Call about once a second, connected or not: the robot's own clock announces what is due,
+    /// whether or not anyone is listening (UC-9). Each announcement is a `sched.fired` event,
+    /// stamped now and kept on disk until the Brain confirms it.
+    pub fn clock(&mut self, now: Now) -> Vec<Out> {
+        let due: Vec<Occurrence> = self
+            .schedule
+            .iter()
+            .filter(|o| o.due_ms <= now.wall_ms && !self.fired.contains_key(&o.id))
+            .cloned()
+            .collect();
+        if due.is_empty() {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        for o in due {
+            self.fired.insert(o.id.clone(), o.due_ms);
+            if now.wall_ms - o.due_ms > LATE_GRACE_MS {
+                continue;
+            }
+            out.push(Out::Robot(Robot::Say {
+                text: o.text.clone(),
+            }));
+            out.extend(self.event("sched.fired", None, json!({ "occurrence_id": o.id }), now));
+        }
+        self.fired
+            .retain(|_, due| now.wall_ms.saturating_sub(*due) < FIRED_KEEP_MS);
+        out.push(self.schedule_state());
+        out
     }
 
     /// A socket has just opened: the `sys.hello` to send first. `seq` starts again with every
@@ -170,7 +274,7 @@ impl Session {
             "protocol_version": PROTOCOL_VERSION,
             "role": "heart",
             "client_wall_ms": now.wall_ms,
-            "capabilities": ["nav.goto", "nav.cancel"],
+            "capabilities": ["nav.goto", "nav.cancel", "sched.window"],
         });
         let mut hello = self.envelope("CMD", "sys.hello", None, payload, now);
         self.hello = hello["corr_id"].as_str().unwrap_or_default().into();
@@ -431,6 +535,17 @@ impl Session {
                 }
             }
             ("nav.goto" | "nav.cancel", None) => refusal("invalid_navigation_payload"),
+            // The next 72 h, replacing what was held (ENVELOPE §5). Accepted only whole.
+            ("sched.window", _) => match occurrences(payload) {
+                None => refusal("invalid_schedule_payload"),
+                Some(window) => {
+                    self.schedule = window;
+                    let done = json!({ "accepted": true, "exec_status": "completed" });
+                    let mut out = self.answer(&key, &topic, &corr_id, done, now);
+                    out.push(self.schedule_state());
+                    return out;
+                }
+            },
             // On the list and addressed to a Heart, but not on this robot yet. An ACK that says no
             // is answered at once; an error would leave the Brain waiting out its timeout.
             ("voice.speak", _) => refusal("local_voice_unavailable"),
@@ -581,6 +696,8 @@ impl Session {
             "docking": unavailable("docking is not built yet".into()),
             "recording": unavailable("recording is not built yet".into()),
             "local-voice": unavailable("the offline voice is not on the robot yet".into()),
+            // The robot keeps its own copy of the next 72 h and fires it on its own clock.
+            "reminders": json!({ "state": "available" }),
             "robot-health": fault.map_or(json!({ "state": "available" }), unavailable),
         }});
         if !self.welcomed || manifest == self.manifest {
@@ -1333,9 +1450,14 @@ mod tests {
         assert_eq!(outs[0]["corr_id"], "S1");
         assert_eq!(outs[0]["payload"]["reason"], "local_voice_unavailable");
 
-        let window = cmd("sched.window", "W1", "w-1", json!({ "occurrences": [] }));
+        let region = cmd(
+            "region.confirm",
+            "R1",
+            "r-1",
+            json!({ "region_id": "kitchen" }),
+        );
         assert_eq!(
-            sent(&session.inbound(&window, at(150)))[0]["payload"]["reason"],
+            sent(&session.inbound(&region, at(150)))[0]["payload"]["reason"],
             "unsupported"
         );
 
@@ -1346,6 +1468,102 @@ mod tests {
         assert_eq!(outs[0]["payload"]["msg_id"], "01BRAINT1");
 
         let outs = sent(&session.inbound(b"{ not json", at(300)));
+        assert_eq!(outs[0]["payload"]["reason"], "malformed");
+    }
+
+    fn says(outs: &[Out]) -> Vec<String> {
+        outs.iter()
+            .filter_map(|out| match out {
+                Out::Robot(Robot::Say { text }) => Some(text.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn window(due: &[(&str, u64)]) -> Value {
+        let occurrences: Vec<Value> = due
+            .iter()
+            .map(|(id, ms)| json!({ "occurrence_id": id, "reminder_id": "rem-1", "text": "take your medicine", "due_time_ms": WALL + ms }))
+            .collect();
+        json!({ "occurrences": occurrences })
+    }
+
+    #[test]
+    fn a_reminder_fires_on_the_robots_clock_with_nobody_listening() {
+        let mut session = welcomed();
+        let w = cmd(
+            "sched.window",
+            "W1",
+            "w-1",
+            window(&[("oc-1", 5_000), ("oc-2", 90_000)]),
+        );
+        let outs = session.inbound(&w, at(100));
+        assert_eq!(sent(&outs)[0]["payload"]["accepted"], true);
+        assert!(
+            outs.iter().any(|o| matches!(o, Out::Schedule(_))),
+            "the window is saved"
+        );
+
+        session.disconnected(); // the Brain is gone
+        assert!(session.clock(at(4_999)).is_empty(), "not before its moment");
+        let outs = session.clock(at(5_000));
+        assert_eq!(says(&outs), vec!["take your medicine"]);
+        let stored: Vec<&Value> = outs
+            .iter()
+            .filter_map(|o| match o {
+                Out::Store(e) => Some(e),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(stored.len(), 1, "the firing waits on disk");
+        assert_eq!(stored[0]["topic"], "sched.fired");
+        assert_eq!(stored[0]["payload"]["occurrence_id"], "oc-1");
+        assert_eq!(
+            stored[0]["t_wall_ms"],
+            WALL + 5_000,
+            "stamped when it was announced"
+        );
+        assert!(sent(&outs).is_empty(), "nothing on the wire with no Brain");
+        assert!(session.clock(at(6_000)).is_empty(), "once");
+    }
+
+    #[test]
+    fn a_window_sent_again_never_announces_a_moment_twice_even_after_a_restart() {
+        let mut session = welcomed();
+        let w = window(&[("oc-1", 5_000)]);
+        session.inbound(&cmd("sched.window", "W1", "w-1", w.clone()), at(100));
+        let saved = match session.clock(at(5_000)).into_iter().last() {
+            Some(Out::Schedule(state)) => state,
+            other => panic!("expected the schedule to be saved, got {other:?}"),
+        };
+        // The Brain has not heard of the firing yet, so its next window still holds it.
+        session.inbound(&cmd("sched.window", "W2", "w-2", w.clone()), at(5_100));
+        assert!(session.clock(at(5_200)).is_empty());
+
+        let mut restarted = Session::new("heart-test", "token", regions());
+        restarted.restore_schedule(&saved);
+        assert!(
+            restarted.clock(at(5_300)).is_empty(),
+            "a restart does not repeat it"
+        );
+    }
+
+    #[test]
+    fn a_moment_long_past_is_not_announced_and_a_bad_window_is_an_error() {
+        let mut session = welcomed();
+        let w = window(&[("oc-old", 1_000)]);
+        session.inbound(&cmd("sched.window", "W1", "w-1", w), at(100));
+        assert!(says(&session.clock(at(1_000 + LATE_GRACE_MS + 1))).is_empty());
+
+        // A malformed window never gets this far: the shared decoder refuses it at the boundary.
+        let bad = cmd(
+            "sched.window",
+            "W2",
+            "w-2",
+            json!({ "occurrences": [{ "occurrence_id": "x" }] }),
+        );
+        let outs = sent(&session.inbound(&bad, at(200)));
+        assert_eq!(outs[0]["kind"], "ERR");
         assert_eq!(outs[0]["payload"]["reason"], "malformed");
     }
 
