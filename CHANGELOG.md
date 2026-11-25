@@ -48,6 +48,16 @@ saved map, the robot reached all six places in turn (18–35 s each). At the fro
 0.24 m from where Gazebo had it — inside Nav2's 0.25 m goal tolerance, one sample, not yet measured
 properly.
 
+**I3b ran here** (vault `STATUS.md` has the run): the real Brain, through gateway `main`, drove the
+robot to the house's kitchen, cancelled a drive on "stop", and explained an `active_fault` refusal.
+
+**Found — a righted robot doesn't know where it is.** For the refusal the robot was tipped and set
+upright with Gazebo's `set_pose`, which also turned it round. AMCL never noticed: after `~/clear` the
+next goal "succeeded" with AMCL putting the robot in the kitchen and Gazebo 4.8 m away, having driven
+the opposite way. Teleporting exaggerates it, but a person standing a fallen robot up does the same.
+Clearing the tip-over lock should probably make the robot relocalize (or at least spread AMCL's
+particles) before it accepts a goal — open question for HEART_DECISIONS.
+
 **Not done:** the camera renders in every world, including the headless proofs — one more load on a
 machine that H3.3 found can fall behind. Picture frames in the house render blank (upstream's
 texture paths point outside the package).
